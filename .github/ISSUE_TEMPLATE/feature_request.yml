@@ -1,0 +1,31 @@
+name: ✨ Feature Request
+description: Suggest new functionality for parsecore
+labels: ["Type: Feature", "Status: Needs Triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What can't you do right now? Describe the problem, not just the solution.
+      placeholder: I want to read a beatmap's storyboard, but ParseCore only decodes the beatmap itself...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: How would you like to use it? A code example helps a lot.
+      render: python
+      placeholder: |
+        from parsecore.Beatmaps.Formats.LegacyStoryboardDecoder import (
+            LegacyStoryboardDecoder,
+        )
+
+        storyboard = LegacyStoryboardDecoder.FromPath("map.osu")
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      placeholder: I currently work around it by reading the file myself, which means parsing it twice...

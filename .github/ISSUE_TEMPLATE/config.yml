@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discord Community
+    url: https://discord.gg/9p7whE7QxQ
+    about: Questions and general help fastest way to reach us.
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/O-Lib/parsecore/blob/main/SECURITY.md
+    about: Please do NOT open a public issue report privately via security@olib.dev.

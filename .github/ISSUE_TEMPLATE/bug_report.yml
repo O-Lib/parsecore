@@ -1,0 +1,50 @@
+name: 🐛 Bug Report
+description: Crashes, parse errors, or other incorrect behavior
+labels: ["Type: Bug", "Status: Needs Triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug!
+        For **wrong pp / star rating values**, please use the dedicated *PP / Star Rating Mismatch* template instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+      placeholder: Decoding this map raises ParsingError, but osu! loads it fine...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: The smallest code snippet that reproduces the issue. Attach the `.osu` file (zip it) or give the beatmap ID.
+      render: python
+      placeholder: |
+        from parsecore.Beatmaps.Formats.LegacyBeatmapDecoder import LegacyBeatmapDecoder
+
+        beatmap = LegacyBeatmapDecoder.FromPath("map.osu")
+    validations:
+      required: true
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Full traceback
+      description: If the bug is an exception, paste the complete traceback.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: parsecore version
+      description: "`pip show parsecore`"
+      placeholder: "1.2.3"
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version & OS
+      placeholder: "Python 3.12.4, macOS 15 (arm64)"
+    validations:
+      required: true

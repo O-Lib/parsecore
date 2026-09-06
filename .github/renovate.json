@@ -1,0 +1,49 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "Europe/Berlin",
+  "schedule": ["before 8am on monday"],
+  "prConcurrentLimit": 5,
+  "labels": ["Type: Chore", "PA: Pending All Reviewers"],
+  "semanticCommits": "enabled",
+  "platformAutomerge": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 8am on the first day of the month"]
+  },
+  "packageRules": [
+    {
+      "description": "Packaging changes are chores, and carry the packaging scope.",
+      "matchManagers": ["pep621", "uv"],
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "packaging",
+      "addLabels": ["Scope: Packaging"]
+    },
+    {
+      "description": "A major bump can change results, so it is never automatic.",
+      "matchManagers": ["pep621", "uv"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Workflow action bumps are chores, and carry the CI scope.",
+      "matchManagers": ["github-actions"],
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "ci",
+      "addLabels": ["Scope: CI"]
+    },
+    {
+      "description": "Auto-merge minor and patch action bumps once CI passes.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group and auto-merge the development tooling.",
+      "matchPackageNames": ["pytest{/,}**", "ruff{/,}**", "coverage{/,}**"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "dev-dependencies",
+      "automerge": true
+    }
+  ]
+}

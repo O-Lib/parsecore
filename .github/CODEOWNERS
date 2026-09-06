@@ -1,0 +1,25 @@
+# CODEOWNERS automatically assigns reviewers for changed files.
+# Last matching pattern takes precedence.
+
+# Default: all files
+* @Error44s @DevilPedrow
+
+# Core library
+/parsecore/Audio/ @Error44s @DevilPedrow
+/parsecore/Beatmaps/ @DevilPedrow @Error44s
+/parsecore/Rulesets/ @Error44s @DevilPedrow
+/parsecore/Scoring/ @Error44s @DevilPedrow
+/parsecore/Utils/ @Error44s @DevilPedrow
+
+# GitHub configuration & CI
+/.github/ @Error44s @DevilPedrow
+
+# Documentation
+/docs/ @Error44s @DevilPedrow
+*.md @Error44s @DevilPedrow
+
+# Tests
+/tests/ @Error44s @DevilPedrow
+
+# Build & packaging
+pyproject.toml @Error44s @DevilPedrow

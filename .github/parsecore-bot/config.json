@@ -1,0 +1,53 @@
+{
+  "bot_name": "ParseCore Bot",
+  "templates": {
+    "header": "## {bot_name} automated review\n\nThis pull request was checked automatically. The review re-runs on every push and edit.",
+    "verdict_pass": "**Result: all checks passed.** A maintainer will review the change shortly.",
+    "verdict_fail": "**Result: changes requested.** One or more required checks did not pass. Please address the items marked *Fail* below.",
+    "verdict_warn": "**Result: passed with remarks.** No blocking problems; please review the *Warning* items below.",
+    "footer": "\n---\n<sub>Automated check. Configuration: <code>.github/parsecore-bot/config.json</code>. Override switch: <code>[skip-comment-check]</code> in the PR description.</sub>"
+  },
+  "checks": {
+    "title": {
+      "enabled": true,
+      "blocking": true,
+      "pattern": "^(feat|fix|docs|style|refactor|perf|test|chore|revert)(\\((beatmap|osu|taiko|catch|mania|mods|pp|scoring|readme|docs|ci|packaging)\\))?(!)?: .{1,72}$",
+      "pass": "Title follows Conventional Commits.",
+      "fail": "The title must follow Conventional Commits: `type(scope): subject`, for example `fix(catch): work the hyper-dash grace period out at single precision`. Scopes: beatmap, osu, taiko, catch, mania, mods, pp, scoring, readme, docs, ci, packaging."
+    },
+    "template": {
+      "enabled": true,
+      "blocking": true,
+      "pass": "The PR template is filled out.",
+      "fail": "Please complete the PR template: provide a Summary, tick at least one Type of Change, and complete the Checklist."
+    },
+    "parity": {
+      "enabled": true,
+      "blocking": true,
+      "pass": "An accuracy statement is provided for the changed calculations.",
+      "fail": "This PR touches code that can change a computed value, but the Accuracy section is empty or marked N/A. Say which values the change can affect, and how you checked them against the values the game awards.",
+      "skip": "Nothing here can change a computed value, so an accuracy statement is not required."
+    },
+    "docs": {
+      "enabled": true,
+      "blocking": false,
+      "pass": "Public API changed and the docs were updated alongside it.",
+      "fail": "This PR adds or changes a public `def`/`class` under `parsecore/` but no docs or README were updated. If the change is user-visible, please update the relevant documentation. This is a reminder only and does not block the review.",
+      "skip": "No public API surface changes were detected; a docs update is not required."
+    },
+    "comment_policy": {
+      "enabled": false,
+      "blocking": true,
+      "pass": "No inline comments were added to parsecore code.",
+      "fail": "This PR adds `#` comments inside `parsecore/`. The codebase is intentionally comment-free apart from the license header; please move explanations into the PR description. Add `[skip-comment-check]` to the description if this is a false positive.",
+      "skip_marker": "[skip-comment-check]"
+    },
+    "size": {
+      "enabled": true,
+      "blocking": false,
+      "warn_added_lines": 800,
+      "pass": "The PR size is reviewable.",
+      "fail": "This PR adds more than {limit} lines. Consider splitting it into smaller, focused PRs; large diffs slow review and increase parity risk."
+    }
+  }
+}

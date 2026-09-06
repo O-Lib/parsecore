@@ -1,0 +1,25 @@
+osu file format v14
+
+[General]
+AudioFilename: audio.mp3
+AudioLeadIn: 0
+PreviewTime: 93453
+Countdown: 0
+SampleSet: Normal
+StackLeniency: 0.7
+Mode: 0
+LetterboxInBreaks: 0
+WidescreenStoryboard: 1
+SamplesMatchPlaybackRate: 1
+
+[Metadata]
+Title:Ifuudoudou
+TitleUnicode:威風堂々
+Artist:yuikonnu
+ArtistUnicode:ゆいこんぬ
+Creator:mk88__
+Version:Ooflet's Hard
+Source:
+Tags:japanese pop ストロベリズム宣言 strawberrism strawberrhythm sengen utaite vocaloid cover umetora 梅とら pomp and circumstance if you do
+BeatmapID:5443751
+BeatmapSetID:2479965

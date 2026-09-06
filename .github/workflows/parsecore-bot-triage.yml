@@ -1,0 +1,59 @@
+name: ParseCore Bot triage
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+      - converted_to_draft
+      - review_requested
+      - review_request_removed
+      - closed
+  pull_request_review:
+    types: [submitted, dismissed]
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: triage-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    name: Greet and label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Verify the logic
+        run: |
+          uv run --script .github/parsecore-bot/pr_welcome.py --self-test
+          uv run --script .github/parsecore-bot/pr_labels.py --self-test
+
+      - name: Welcome the pull request
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+        run: uv run --script .github/parsecore-bot/pr_welcome.py
+
+      - name: Apply labels
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+        run: uv run --script .github/parsecore-bot/pr_labels.py

@@ -1,0 +1,55 @@
+name: Crowdin Translation Sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'crowdin.yml'
+  schedule:
+    # Pull new translations every Monday morning.
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  synchronize:
+    name: Upload sources & download translations
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Build gettext catalogs
+        run: |
+          pip install --upgrade pip
+          pip install -r docs/requirements.txt
+          pip install .
+          sphinx-build -b gettext docs docs/_build/gettext
+
+      - name: Crowdin push sources & pull translations
+        uses: crowdin/github-action@v3
+        with:
+          upload_sources: true
+          upload_translations: false
+          download_translations: true
+          # Only pull community translations a proofreader has approved, and
+          # leave anything untranslated in English instead of shipping blanks.
+          export_only_approved: true
+          skip_untranslated_strings: true
+          localization_branch_name: l10n_crowdin
+          create_pull_request: true
+          pull_request_title: 'chore(i18n): new Crowdin translations'
+          pull_request_body: 'Automated translation update from Crowdin.'
+          pull_request_base_branch_name: main
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

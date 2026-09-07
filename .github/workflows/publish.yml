@@ -1,0 +1,91 @@
+name: Release to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Build sdist & wheel
+        run: |
+          pip install --upgrade pip build
+          python -m build
+
+      - name: Install the built wheel
+        run: pip install dist/*.whl
+
+      - name: Sanity-check the wheel
+        shell: python {0}
+        run: |
+          from parsecore.Beatmaps.Formats.LegacyBeatmapDecoder import (
+              LegacyBeatmapDecoder,
+          )
+          from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
+          from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapConverter import (
+              OsuBeatmapConverter,
+          )
+          from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapProcessor import (
+              OsuBeatmapProcessor,
+          )
+          from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyCalculator import (
+              OsuDifficultyCalculator,
+          )
+
+          decoded = LegacyBeatmapDecoder.FromText(
+              "osu file format v14\n"
+              "[General]\nMode: 0\n"
+              "[Difficulty]\nCircleSize:4\nApproachRate:9\n"
+              "OverallDifficulty:8\nSliderMultiplier:1.4\nSliderTickRate:1\n"
+              "[TimingPoints]\n0,300,4,2,0,60,1,0\n"
+              "[HitObjects]\n"
+              "100,100,1000,1,0\n200,200,1200,1,0\n300,100,1400,1,0\n"
+          )
+          playable = WorkingBeatmap(decoded).GetPlayableBeatmap(
+              OsuBeatmapConverter, OsuBeatmapProcessor
+          )
+          attributes = OsuDifficultyCalculator(playable, decoded).Calculate()
+
+          assert attributes.MaxCombo == 3, attributes.MaxCombo
+          assert attributes.StarRating > 0, attributes.StarRating
+          print("wheel ok:", attributes.StarRating)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    environment:
+      name: pypi
+      url: https://pypi.org/project/parsecore/
+    permissions:
+      # Trusted publishing (OIDC) — no API token needed once the
+      # GitHub repo is registered as a trusted publisher on PyPI.
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,0 +1,26 @@
+osu file format v12
+
+[General]
+AudioFilename: Candy Galy.mp3
+AudioLeadIn: 1500
+PreviewTime: 44724
+Countdown: 0
+SampleSet: Soft
+StackLeniency: 0.7
+Mode: 3
+LetterboxInBreaks: 0
+CountdownOffset: 1
+SpecialStyle: 0
+WidescreenStoryboard: 1
+
+[Metadata]
+Title:Candy Galy
+TitleUnicode:Candy Galy
+Artist:Risk Junk-G
+ArtistUnicode:Risk Junk-G
+Creator:Staiain
+Version:4K NM
+Source:Beatmania IIDX
+Tags:nb3 nuclear blast 3 gold ishimaru94 yunofanatic hawke
+BeatmapID:375581
+BeatmapSetID:147745

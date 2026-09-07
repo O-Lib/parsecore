@@ -1,0 +1,62 @@
+name: Stale Issues & PRs
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # daily at 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    name: Mark and close stale items
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Mint app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/stale@v10
+        with:
+          repo-token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+
+          days-before-issue-stale: 30
+          days-before-issue-close: 14
+          stale-issue-label: 'Status: Stale'
+          close-issue-label: 'Status: Wont Fix'
+          exempt-issue-labels: 'Status: In Progress,Status: Blocked,Priority: Critical,Priority: High'
+          stale-issue-message: |
+            This issue has had no activity for 30 days and has been marked as stale.
+
+            If it is still relevant, please leave a comment or update the issue and the stale label will be removed automatically. If no activity occurs within the next 14 days, this issue will be closed automatically.
+
+          close-issue-message: |
+            This issue has been closed automatically due to inactivity.
+
+            If you believe it is still relevant, feel free to reopen it with additional context.
+
+          days-before-pr-stale: 21
+          days-before-pr-close: 7
+          stale-pr-label: 'Status: Stale'
+          close-pr-label: 'Status: Wont Fix'
+          exempt-pr-labels: 'Status: In Progress,Status: Blocked,PR: Do Not Merge,Priority: Critical,Priority: High'
+          stale-pr-message: |
+            This pull request has had no activity for 21 days and has been marked as stale.
+
+            If it is still being worked on, please push a commit or leave a comment and the stale label will be removed automatically. If no activity occurs within the next 7 days, this pull request will be closed automatically.
+
+          close-pr-message: |
+            This pull request has been closed automatically due to inactivity.
+
+            If you would like to continue this work, feel free to reopen it or open a new pull request.
+
+          remove-stale-when-updated: true
+          ascending: true
+          operations-per-run: 100

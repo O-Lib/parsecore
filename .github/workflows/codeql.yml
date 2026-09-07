@@ -1,0 +1,81 @@
+name: CodeQL Analysis
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'parsecore/**/*.py'
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    name: CodeQL — Python
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check if Python files changed
+        id: changed
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+            const hasPython = files.some(f =>
+              (f.filename.startsWith('parsecore/') || f.filename.startsWith('tests/')) &&
+              f.filename.endsWith('.py')
+            );
+            core.setOutput('has_python', hasPython ? 'true' : 'false');
+
+      - name: Skip — no Python files changed
+        if: github.event_name == 'pull_request' && steps.changed.outputs.has_python == 'false'
+        run: echo "No Python files changed, skipping CodeQL analysis."
+
+      - name: Set up Python
+        if: github.event_name != 'pull_request' || steps.changed.outputs.has_python == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        if: github.event_name != 'pull_request' || steps.changed.outputs.has_python == 'true'
+        run: |
+          pip install --upgrade pip
+          pip install requests
+
+      - name: Initialize CodeQL
+        if: github.event_name != 'pull_request' || steps.changed.outputs.has_python == 'true'
+        uses: github/codeql-action/init@v4
+        with:
+          languages: python
+          queries: security-and-quality
+          config: |
+            paths:
+              - parsecore
+            paths-ignore:
+              - parsecore/Mods/generated_mods.py
+            query-filters:
+              - exclude:
+                  tags contain: experimental
+
+      - name: Perform CodeQL Analysis
+        if: github.event_name != 'pull_request' || steps.changed.outputs.has_python == 'true'
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:python"
+          upload: always

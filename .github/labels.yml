@@ -1,0 +1,232 @@
+# Type
+- name: "Type: Bug"
+  color: "d73a4a"
+  description: "Something is broken or behaves incorrectly"
+
+- name: "Type: Feature"
+  color: "a2eeef"
+  description: "New functionality or capability"
+
+- name: "Type: Enhancement"
+  color: "84b6eb"
+  description: "Improvement to existing functionality"
+
+- name: "Type: Performance"
+  color: "f9d0c4"
+  description: "Improves speed, memory, or efficiency"
+
+- name: "Type: Refactor"
+  color: "e4e669"
+  description: "Internal restructuring without behavior change"
+
+- name: "Type: Docs"
+  color: "0075ca"
+  description: "Documentation only changes"
+
+- name: "Type: Test"
+  color: "bfd4f2"
+  description: "Adding or updating tests"
+
+- name: "Type: Chore"
+  color: "e4e4e4"
+  description: "Maintenance, tooling, CI, dependencies"
+
+- name: "Type: Revert"
+  color: "ee0701"
+  description: "Reverts a previous commit or PR"
+
+# Scope
+- name: "Scope: Beatmap"
+  color: "ff9f1c"
+  description: "Relates to beatmap parsing or encoding"
+
+- name: "Scope: Mods"
+  color: "c5def5"
+  description: "Relates to the mod system"
+
+- name: "Scope: PP"
+  color: "7057ff"
+  description: "Relates to performance point calculation"
+
+- name: "Scope: CI"
+  color: "0e8a16"
+  description: "Relates to CI/CD pipelines or GitHub Actions"
+
+- name: "Scope: Packaging"
+  color: "fbca04"
+  description: "Relates to pyproject.toml, build, or release"
+
+- name: "Scope: Typing"
+  color: "1d76db"
+  description: "Relates to type hints or mypy compliance"
+
+# Priority
+- name: "Priority: Critical"
+  color: "b60205"
+  description: "Must be resolved immediately — blocks release or causes data loss"
+
+- name: "Priority: High"
+  color: "e11d48"
+  description: "Should be resolved soon"
+
+- name: "Priority: Medium"
+  color: "f59e0b"
+  description: "Important but not urgent"
+
+- name: "Priority: Low"
+  color: "6b7280"
+  description: "Nice to have, non-blocking"
+
+# Status
+- name: "Status: Needs Triage"
+  color: "ededed"
+  description: "Opened but not yet reviewed or categorized"
+
+- name: "Status: Confirmed"
+  color: "0075ca"
+  description: "Issue or bug confirmed and reproducible"
+
+- name: "Status: In Progress"
+  color: "fef3c7"
+  description: "Actively being worked on"
+
+- name: "Status: Blocked"
+  color: "b60205"
+  description: "Cannot proceed until another issue or PR is resolved"
+
+- name: "Status: Stale"
+  color: "cccccc"
+  description: "No activity for an extended period"
+
+- name: "Status: Wont Fix"
+  color: "ffffff"
+  description: "Acknowledged but intentionally not being addressed"
+
+- name: "Status: Duplicate"
+  color: "cfd3d7"
+  description: "Already reported or tracked elsewhere"
+
+- name: "Status: Invalid"
+  color: "e4e4e4"
+  description: "Not a valid issue or not reproducible"
+
+# PR
+- name: "PR: Ready For Review"
+  color: "0e8a16"
+  description: "PR is complete and ready to be reviewed"
+
+- name: "PR: Draft"
+  color: "d4c5f9"
+  description: "Work in progress, not ready for review"
+
+- name: "PR: Changes Requested"
+  color: "e99695"
+  description: "Reviewer has requested changes"
+
+- name: "PR: Approved"
+  color: "0e8a16"
+  description: "Approved and ready to merge"
+
+- name: "PR: Needs Rebase"
+  color: "fbca04"
+  description: "Branch needs to be rebased on main"
+
+- name: "PR: Do Not Merge"
+  color: "b60205"
+  description: "Must not be merged in its current state"
+
+- name: "PR: Merged"
+  color: "8957e5"
+  description: "Pull request has been merged"
+
+- name: "PR: Closed Without Merge"
+  color: "6b7280"
+  description: "PR was closed without being merged"
+
+# PA
+- name: "PA: Pending All Reviewers"
+  color: "f59e0b"
+  description: "Waiting for all assigned reviewers to review"
+
+- name: "PA: Pending One Reviewer"
+  color: "fef3c7"
+  description: "Waiting for at least one more reviewer"
+
+- name: "PA: Awaiting Author"
+  color: "e99695"
+  description: "Ball is in the author's court — changes or response needed"
+
+- name: "PA: Awaiting CI"
+  color: "d4c5f9"
+  description: "Waiting for CI checks to pass before further review"
+
+- name: "PA: Reviewer Assigned"
+  color: "c5def5"
+  description: "A reviewer has been assigned but has not yet reviewed"
+
+- name: "PA: Under Review"
+  color: "84b6eb"
+  description: "At least one reviewer is actively reviewing"
+
+- name: "PA: Second Opinion Needed"
+  color: "ff9f1c"
+  description: "Extra reviewer requested for a complex or sensitive change"
+
+# Breaking
+- name: "Breaking Change"
+  color: "b60205"
+  description: "Introduces a backwards-incompatible API change"
+
+- name: "Semver: Patch"
+  color: "c2e0c6"
+  description: "Bug fix — patch version bump (x.x.N)"
+
+- name: "Semver: Minor"
+  color: "bfd4f2"
+  description: "New feature — minor version bump (x.N.0)"
+
+- name: "Semver: Major"
+  color: "e11d48"
+  description: "Breaking change — major version bump (N.0.0)"
+
+# Review
+- name: "Review: Needs Tests"
+  color: "f9d0c4"
+  description: "Missing or insufficient test coverage"
+
+- name: "Review: Needs Docs"
+  color: "0075ca"
+  description: "Missing or incomplete documentation"
+
+- name: "Review: Needs Types"
+  color: "1d76db"
+  description: "Missing type hints or mypy errors"
+
+- name: "Review: Security Concern"
+  color: "b60205"
+  description: "Reviewer flagged a potential security issue"
+
+- name: "Review: Performance Concern"
+  color: "f59e0b"
+  description: "Reviewer flagged a potential performance regression"
+
+- name: "Review: API Design"
+  color: "e4e669"
+  description: "Reviewer wants to discuss the public API design before merging"
+
+- name: "Review: Logic Error"
+  color: "d73a4a"
+  description: "Reviewer identified a correctness or logic issue"
+
+# Community
+- name: "Good First Issue"
+  color: "7057ff"
+  description: "Suitable for first-time contributors"
+
+- name: "Help Wanted"
+  color: "008672"
+  description: "Extra attention or outside help is needed"
+
+- name: "Question"
+  color: "d876e3"
+  description: "Further information is requested"

@@ -1,0 +1,78 @@
+name: 🎯 PP / Star Rating Mismatch
+description: parsecore computes a different pp or star rating than expected
+labels: ["Type: Bug", "Scope: PP", "Status: Needs Triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before you report, please check:**
+        1. ParseCore matches **the value the game itself awards**. Third-party calculators, bots and websites often lag behind after a rework, so a difference to *them* is usually not a bug.
+        2. Right after a rework, even the website temporarily shows **old** values while millions of beatmaps and billions of scores are recalculated.
+
+        A report is valid when ParseCore differs from what the game awards for a newly set score.
+  - type: input
+    id: beatmap
+    attributes:
+      label: Beatmap
+      description: Beatmap ID or link (attach the `.osu` if it's not on the website)
+      placeholder: "https://osu.ppy.sh/beatmaps/5514993"
+    validations:
+      required: true
+  - type: input
+    id: ruleset
+    attributes:
+      label: Ruleset & convert?
+      placeholder: "osu! native / osu!→mania convert / ..."
+    validations:
+      required: true
+  - type: input
+    id: mods
+    attributes:
+      label: Mods
+      placeholder: "HDDT (lazer score with CL)"
+    validations:
+      required: true
+  - type: textarea
+    id: score
+    attributes:
+      label: Score statistics
+      description: Full hit statistics great/ok/meh/miss, combo, slider tail hits & large ticks (lazer), legacy total score (stable).
+      placeholder: |
+        great: 194, ok: 0, meh: 0, miss: 0
+        combo: 277 / 277
+        slider_tail_hit: 68, large_tick_hit: 15
+        lazer score: yes
+    validations:
+      required: true
+  - type: textarea
+    id: values
+    attributes:
+      label: Expected vs. actual value
+      description: What does parsecore compute, what does the game award, and where did you read the expected value?
+      placeholder: |
+        parsecore: 419.98pp
+        in-game (score set today): 421.30pp
+        source: score page on osu.ppy.sh
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Your parsecore call
+      render: python
+      placeholder: |
+        result = (
+            Performance(bm).lazer(True)
+            .n300(194).n100(0).n50(0).misses(0)
+            .combo(277).slider_end_hits(68).large_tick_hits(15)
+            .calculate()
+        )
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: parsecore version
+      placeholder: "1.2.3"
+    validations:
+      required: true

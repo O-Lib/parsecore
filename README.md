@@ -1,4 +1,4 @@
-from parsecore.Rulesets.Osu.Mods.OsuModDoubleTime import OsuModDoubleTime<div align="center">
+<div align="center">
 
 ![ParseCore](https://i.imgur.com/35asYBQ.jpeg)
 

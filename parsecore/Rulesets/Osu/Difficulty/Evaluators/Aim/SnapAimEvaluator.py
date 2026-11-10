@@ -25,11 +25,16 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
 from parsecore.Rulesets.Osu.Difficulty.Preprocessing.OsuDifficultyHitObject import (
     NORMALISED_DIAMETER,
     NORMALISED_RADIUS,
+    OsuDifficultyHitObject,
 )
 from parsecore.Rulesets.Osu.Objects.Slider import Slider
 from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
@@ -46,7 +51,7 @@ WIGGLE_MULTIPLIER = 1.02
 WIDE_ANGLE_TIME_SCALE = 1.45
 
 
-def EvaluateDifficultyOf(current, with_slider_travel_distance: bool) -> float:
+def EvaluateDifficultyOf(current: DifficultyHitObject, with_slider_travel_distance: bool) -> float:
     """Return the snap-aim difficulty of moving onto ``current``.
 
     Args:
@@ -56,8 +61,8 @@ def EvaluateDifficultyOf(current, with_slider_travel_distance: bool) -> float:
     Returns:
         The snap difficulty of this object.
     """
-    osu_curr_obj = current
-    osu_last_obj = current.Previous()
+    osu_curr_obj = cast(OsuDifficultyHitObject, current)
+    osu_last_obj = cast(OsuDifficultyHitObject, current.Previous())
 
     if (
         isinstance(current.BaseObject, Spinner)
@@ -66,7 +71,7 @@ def EvaluateDifficultyOf(current, with_slider_travel_distance: bool) -> float:
     ):
         return 0.0
 
-    osu_last2_obj = current.Previous(2)
+    osu_last2_obj = cast(OsuDifficultyHitObject, current.Previous(2))
 
     radius = NORMALISED_RADIUS
     diameter = NORMALISED_DIAMETER
@@ -108,7 +113,7 @@ def EvaluateDifficultyOf(current, with_slider_travel_distance: bool) -> float:
         acute_angle_bonus = 0.0
         if max(
             osu_curr_obj.AdjustedDeltaTime, osu_last_obj.AdjustedDeltaTime
-        ) < 1.25 * min(osu_curr_obj.AdjustedDeltaTime, osu_last_obj.AdjustedDeltaTime):
+        ) < 1.25 * float(min(osu_curr_obj.AdjustedDeltaTime, osu_last_obj.AdjustedDeltaTime)):
             # Only when the rhythm is unchanged.
             acute_angle_bonus = CalcAngleAcuteness(curr_angle)
 
@@ -205,7 +210,7 @@ def EvaluateDifficultyOf(current, with_slider_travel_distance: bool) -> float:
         overlap_velocity_buff = min(
             diameter
             * 1.25
-            / min(osu_curr_obj.AdjustedDeltaTime, osu_last_obj.AdjustedDeltaTime),
+            / float(min(osu_curr_obj.AdjustedDeltaTime, osu_last_obj.AdjustedDeltaTime)),
             abs(prev_velocity - curr_velocity),
         )
 
@@ -235,11 +240,14 @@ def _high_bpm_bonus(ms: float) -> float:
 
     Args:
         ms: The time available for the movement, in milliseconds.
+
+    Returns:
+        The high BPM bonus multiplier.
     """
     return 1 / (1 - DiffUtils.Pow(0.03, DiffUtils.Pow(ms / 1000, 0.65)))
 
 
-def _vector_angle_repetition(current, previous) -> float:
+def _vector_angle_repetition(current: OsuDifficultyHitObject, previous: OsuDifficultyHitObject) -> float:
     """Return a penalty for repeating the same movement direction.
 
     Args:
@@ -259,15 +267,15 @@ def _vector_angle_repetition(current, previous) -> float:
     constant_angle_count = 0.0
 
     for index in range(note_limit):
-        prev_obj = current.Previous(index)
+        prev_obj = cast(OsuDifficultyHitObject | None, current.Previous(index))
         if prev_obj is None:
             break
 
         # Only vectors within one rhythm section count; a rhythm change breaks
         # the momentum that makes repetition easy.
-        if max(current.AdjustedDeltaTime, prev_obj.AdjustedDeltaTime) > 1.1 * min(
+        if max(current.AdjustedDeltaTime, prev_obj.AdjustedDeltaTime) > 1.1 * float(min(
             current.AdjustedDeltaTime, prev_obj.AdjustedDeltaTime
-        ):
+        )):
             break
 
         if (
@@ -315,6 +323,9 @@ def _calc_angle_wideness(angle: float) -> float:
 
     Args:
         angle: The angle in radians.
+
+    Returns:
+        The angle wideness factor from 0.0 to 1.0.
     """
     return DiffUtils.Smoothstep(angle, math.radians(40), math.radians(140))
 
@@ -324,5 +335,8 @@ def CalcAngleAcuteness(angle: float) -> float:
 
     Args:
         angle: The angle in radians.
+
+    Returns:
+        The angle acuteness factor from 0.0 to 1.0.
     """
     return DiffUtils.Smoothstep(angle, math.radians(140), math.radians(40))

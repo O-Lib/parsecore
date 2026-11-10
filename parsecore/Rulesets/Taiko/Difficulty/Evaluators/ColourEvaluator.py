@@ -25,8 +25,24 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.AlternatingMonoPattern import (
+    AlternatingMonoPattern,
+)
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.MonoStreak import (
+    MonoStreak,
+)
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.RepeatingHitPatterns import (
+    RepeatingHitPatterns,
+)
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+    TaikoDifficultyHitObject,
+)
 
 # How close two spacing ratios must be to count as the same rhythm.
 CONSISTENT_RATIO_THRESHOLD = 0.01
@@ -35,13 +51,14 @@ CONSISTENT_RATIO_THRESHOLD = 0.01
 MAX_OBJECTS_TO_CHECK = 64
 
 
-def EvaluateDifficultyOf(hit_object) -> float:
+def EvaluateDifficultyOf(hit_object: DifficultyHitObject) -> float:
     """Return how hard a note's colour pattern is.
 
     Args:
         hit_object: The difficulty object to rate.
     """
-    colour_data = hit_object.ColourData
+    taiko_object = cast(TaikoDifficultyHitObject, hit_object)
+    colour_data = taiko_object.ColourData
     difficulty = 0.0
 
     if (
@@ -66,11 +83,11 @@ def EvaluateDifficultyOf(hit_object) -> float:
             colour_data.RepeatingHitPattern
         )
 
-    return difficulty * _consistent_ratio_penalty(hit_object)
+    return difficulty * _consistent_ratio_penalty(taiko_object)
 
 
 def _consistent_ratio_penalty(
-    hit_object,
+    hit_object: TaikoDifficultyHitObject,
     threshold: float = CONSISTENT_RATIO_THRESHOLD,
     max_objects_to_check: int = MAX_OBJECTS_TO_CHECK,
 ) -> float:
@@ -123,7 +140,7 @@ def _consistent_ratio_penalty(
     return 0.7 + 0.3 * DiffUtils.Smootherstep(max_ratio_deviation, 0.0, 1.0)
 
 
-def _evaluate_mono_streak_difficulty(mono_streak) -> float:
+def _evaluate_mono_streak_difficulty(mono_streak: MonoStreak) -> float:
     """Return how hard one colour run is, given the pattern it sits in.
 
     Args:
@@ -136,7 +153,7 @@ def _evaluate_mono_streak_difficulty(mono_streak) -> float:
     )
 
 
-def _evaluate_alternating_mono_pattern_difficulty(alternating_mono_pattern) -> float:
+def _evaluate_alternating_mono_pattern_difficulty(alternating_mono_pattern: AlternatingMonoPattern) -> float:
     """Return how hard one alternating pattern is, given its group.
 
     Args:
@@ -147,7 +164,7 @@ def _evaluate_alternating_mono_pattern_difficulty(alternating_mono_pattern) -> f
     ) * _evaluate_repeating_hit_patterns_difficulty(alternating_mono_pattern.Parent)
 
 
-def _evaluate_repeating_hit_patterns_difficulty(repeating_hit_pattern) -> float:
+def _evaluate_repeating_hit_patterns_difficulty(repeating_hit_pattern: RepeatingHitPatterns) -> float:
     """Return how hard a pattern group is, given how recently it recurred.
 
     Args:

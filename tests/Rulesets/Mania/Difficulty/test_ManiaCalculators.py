@@ -156,17 +156,18 @@ def _play(path, acronyms):
     """
     mods = [MODS[a]() for a in acronyms]
     decoded = LegacyBeatmapDecoder.FromPath(str(path))
-    playable = WorkingBeatmap(decoded).GetPlayableBeatmap(
+    working_beatmap = WorkingBeatmap(decoded)
+    playable = working_beatmap.GetPlayableBeatmap(
         ManiaBeatmapConverter, None, mods
     )
-    attributes = ManiaDifficultyCalculator(playable).Calculate(mods)
+    attributes = ManiaDifficultyCalculator(working_beatmap).Calculate(mods)
 
     notes = sum(1 for h in playable.HitObjects if isinstance(h, Note))
     holds = sum(1 for h in playable.HitObjects if isinstance(h, HoldNote))
 
     score = ScoreInfo(
         Mods=mods,
-        BeatmapDifficulty=decoded.Difficulty,
+        BeatmapInfo=decoded.BeatmapInfo,
         MaxCombo=attributes.MaxCombo,
         Accuracy=1.0,
         Statistics={HitResult.Perfect: notes + holds * 2},
@@ -229,7 +230,7 @@ def test_a_faster_beatmap_is_harder():
 
     plain = ManiaDifficultyCalculator(convert(decoded)).Calculate([])
     fast = ManiaDifficultyCalculator(
-        convert(decoded, [ManiaModDoubleTime()])
+        convert(decoded)
     ).Calculate([ManiaModDoubleTime()])
 
     assert plain.StarRating == 1.2219015455650597
@@ -289,12 +290,15 @@ def test_easy_halves_what_a_score_is_worth():
 
 def test_nothing_is_awarded_below_eighty_per_cent():
     """The pp curve starts at eighty per cent accuracy and not before."""
-    beatmap = convert(decode_mania(notes_in(*range(4), keys=4) * 1, keys=4))
-    attributes = ManiaDifficultyCalculator(beatmap).Calculate([])
+    working_beatmap = convert(decode_mania(notes_in(*range(4), keys=4) * 1, keys=4))
+    beatmap = working_beatmap.GetPlayableBeatmap(
+        ManiaBeatmapConverter, None, []
+    )
+    attributes = ManiaDifficultyCalculator(working_beatmap).Calculate([])
 
     poor = ScoreInfo(
         Mods=[],
-        BeatmapDifficulty=beatmap.Difficulty,
+        BeatmapInfo=beatmap.BeatmapInfo,
         MaxCombo=0,
         Accuracy=0.0,
         Statistics={HitResult.Meh: 4},
@@ -305,13 +309,16 @@ def test_nothing_is_awarded_below_eighty_per_cent():
 
 def test_a_three_hundred_and_twenty_is_worth_more_than_a_three_hundred():
     """Mania weighs its two best judgements apart, unlike the accuracy shown."""
-    beatmap = convert(decode_mania(notes_in(*range(4), keys=4), keys=4))
-    attributes = ManiaDifficultyCalculator(beatmap).Calculate([])
+    working_beatmap = convert(decode_mania(notes_in(*range(4), keys=4), keys=4))
+    beatmap = working_beatmap.GetPlayableBeatmap(
+        ManiaBeatmapConverter, None, []
+    )
+    attributes = ManiaDifficultyCalculator(working_beatmap).Calculate([])
 
     def worth(result):
         score = ScoreInfo(
             Mods=[],
-            BeatmapDifficulty=beatmap.Difficulty,
+            BeatmapInfo=beatmap.BeatmapInfo,
             MaxCombo=attributes.MaxCombo,
             Accuracy=1.0,
             Statistics={result: 4},

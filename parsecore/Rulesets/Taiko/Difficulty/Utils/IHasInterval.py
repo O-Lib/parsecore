@@ -31,4 +31,6 @@ from typing import Protocol, runtime_checkable
 class IHasInterval(Protocol):
     """Something with a gap to the thing before it."""
 
-    Interval: float
+    @property
+    def Interval(self) -> float:
+        """Return the gap to the object before this one."""

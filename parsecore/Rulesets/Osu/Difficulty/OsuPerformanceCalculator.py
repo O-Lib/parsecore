@@ -25,11 +25,17 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
+from parsecore.Rulesets.Difficulty.DifficultyAttributes import DifficultyAttributes
 from parsecore.Rulesets.Difficulty.PerformanceCalculator import PerformanceCalculator
 from parsecore.Rulesets.Difficulty.Skills.HarmonicSkill import HarmonicSkill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.IApplicableToDifficulty import IApplicableToDifficulty
 from parsecore.Rulesets.Mods.ModScoreV2 import ModScoreV2
+from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyAttributes import (
+    OsuDifficultyAttributes,
+)
 from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyCalculator import (
     PERFORMANCE_BASE_MULTIPLIER,
     PERFORMANCE_NORM_EXPONENT,
@@ -57,7 +63,10 @@ from parsecore.Rulesets.Osu.Objects.OsuHitObject import (
 )
 from parsecore.Rulesets.Osu.Scoring.OsuHitWindows import OsuHitWindows
 from parsecore.Rulesets.Scoring.HitResult import HitResult
+from parsecore.Scoring.ScoreInfo import ScoreInfo
+from parsecore.Utils import ModUtils
 from parsecore.Utils.Interpolation import DoubleLerp
+from parsecore.Utils.Precision import Clamp
 
 # The 99% one-tailed critical value of the normal distribution.
 Z_99 = 2.32634787404
@@ -117,7 +126,7 @@ class OsuPerformanceCalculator(PerformanceCalculator):
         return self._count_ok + self._count_meh + self._count_miss
 
     def CreatePerformanceAttributes(
-        self, score, attributes
+            self, score: ScoreInfo, attributes: DifficultyAttributes
     ) -> OsuPerformanceAttributes:
         """Return what a score is worth.
 
@@ -125,33 +134,32 @@ class OsuPerformanceCalculator(PerformanceCalculator):
             score: The score to evaluate.
             attributes: The beatmap's osu! difficulty attributes.
         """
-        mods = list(score.Mods)
+        osu_attributes = cast(OsuDifficultyAttributes, attributes)
 
         self._using_classic_slider_accuracy = any(
-            isinstance(m, OsuModClassic) and getattr(m, "NoSliderHeadAccuracy", False)
-            for m in mods
+            m.NoSliderHeadAccuracy for m in score.Mods if isinstance(m, OsuModClassic)
         )
-        self._using_score_v2 = any(isinstance(m, ModScoreV2) for m in mods)
+        self._using_score_v2 = any(isinstance(m, ModScoreV2) for m in score.Mods)
 
-        self._accuracy = min(max(score.Accuracy, 0.0), 1.0)
-        self._score_max_combo = min(max(score.MaxCombo, 0), attributes.MaxCombo)
+        self._accuracy = Clamp(score.Accuracy, 0.0, 1.0)
+        self._score_max_combo = Clamp(score.MaxCombo, 0, osu_attributes.MaxCombo)
 
         self._count_great = score.GetCount(HitResult.Great)
         self._count_ok = score.GetCount(HitResult.Ok)
         self._count_meh = score.GetCount(HitResult.Meh)
         self._count_miss = score.GetCount(HitResult.Miss)
-        self._count_slider_ends_dropped = attributes.SliderCount - score.GetCount(
+        self._count_slider_ends_dropped = osu_attributes.SliderCount - score.GetCount(
             HitResult.SliderTailHit
         )
         self._count_slider_tick_miss = score.GetCount(HitResult.LargeTickMiss)
+        self._effective_miss_count = self._count_miss
 
-        difficulty = score.BeatmapDifficulty.Clone()
-        for mod in mods:
-            apply = getattr(mod, "ApplyToDifficulty", None)
-            if callable(apply):
-                apply(difficulty)
+        difficulty = score.BeatmapInfo.Difficulty.Clone()
+        for mod in score.Mods:
+            if isinstance(mod, IApplicableToDifficulty):
+                mod.ApplyToDifficulty(difficulty)
 
-        self._clock_rate = _clock_rate_with_mods(mods)
+        self._clock_rate = ModUtils.CalculateRateWithMods(score.Mods)
 
         hit_windows = OsuHitWindows()
         hit_windows.SetDifficulty(difficulty.OverallDifficulty)
@@ -167,21 +175,18 @@ class OsuPerformanceCalculator(PerformanceCalculator):
         self._overall_difficulty = (79.5 - self._great_hit_window) / 6
         self._drain_rate = difficulty.DrainRate
 
-        combo_based_estimated_miss_count = self._combo_based_estimated_miss_count(
-            attributes
-        )
+        combo_based_estimated_miss_count = self._combo_based_estimated_miss_count(osu_attributes)
 
         if (
             self._using_classic_slider_accuracy
             and not self._using_score_v2
-            and getattr(score, "LegacyTotalScore", None) is not None
+            and score.LegacyTotalScore > 0
         ):
             # An osu!stable score records a total but not where the combo
             # broke, and what the total falls short by says more than the
             # combo alone does.
-            self._effective_miss_count = OsuLegacyScoreMissCalculator(
-                score, attributes
-            ).Calculate()
+            legacy_score_miss_calculator = OsuLegacyScoreMissCalculator(score, osu_attributes)
+            self._effective_miss_count = legacy_score_miss_calculator.Calculate()
         else:
             self._effective_miss_count = combo_based_estimated_miss_count
 
@@ -195,23 +200,23 @@ class OsuPerformanceCalculator(PerformanceCalculator):
 
         if self._effective_miss_count > 0:
             self._aim_estimated_slider_breaks = self._estimated_slider_breaks(
-                attributes.AimTopWeightedSliderFactor, attributes
+                osu_attributes.AimTopWeightedSliderFactor, osu_attributes
             )
             self._speed_estimated_slider_breaks = self._estimated_slider_breaks(
-                attributes.SpeedTopWeightedSliderFactor, attributes
+                osu_attributes.SpeedTopWeightedSliderFactor, osu_attributes
             )
 
         multiplier = PERFORMANCE_BASE_MULTIPLIER
 
-        if any(isinstance(m, OsuModNoFail) for m in mods):
+        if any(isinstance(m, OsuModNoFail) for m in score.Mods):
             multiplier *= max(0.90, 1.0 - 0.02 * self._effective_miss_count)
 
-        if any(isinstance(m, OsuModSpunOut) for m in mods) and self._total_hits > 0:
+        if any(isinstance(m, OsuModSpunOut) for m in score.Mods) and self._total_hits > 0:
             multiplier *= 1.0 - DiffUtils.Pow(
-                attributes.SpinnerCount / self._total_hits, 0.85
+                float(osu_attributes.SpinnerCount) / self._total_hits, 0.85
             )
 
-        if any(isinstance(m, OsuModRelax) for m in mods):
+        if any(isinstance(m, OsuModRelax) for m in score.Mods):
             # Relax turns oks and mehs into what are effectively combo breaks.
             # OD 13.33 is where the great window reaches zero.
             ok_multiplier = 0.75 * max(
@@ -230,16 +235,16 @@ class OsuPerformanceCalculator(PerformanceCalculator):
                 self._effective_miss_count
                 + self._count_ok * ok_multiplier
                 + self._count_meh * meh_multiplier,
-                self._total_hits,
+                self._total_hits
             )
 
-        self._speed_deviation = self._calculate_speed_deviation(attributes)
+        self._speed_deviation = self._calculate_speed_deviation(osu_attributes)
 
-        aim_value = self._compute_aim_value(mods, attributes)
-        speed_value = self._compute_speed_value(mods, attributes)
-        accuracy_value = self._compute_accuracy_value(mods, attributes)
-        reading_value = self._compute_reading_value(attributes)
-        flashlight_value = self._compute_flashlight_value(mods, attributes)
+        aim_value = self._compute_aim_value(score, osu_attributes)
+        speed_value = self._compute_speed_value(score, osu_attributes)
+        accuracy_value = self._compute_accuracy_value(score, osu_attributes)
+        reading_value = self._compute_reading_value(osu_attributes)
+        flashlight_value = self._compute_flashlight_value(score, osu_attributes)
 
         cognition_value = SumCognitionDifficulty(reading_value, flashlight_value)
 
@@ -268,13 +273,14 @@ class OsuPerformanceCalculator(PerformanceCalculator):
             SpeedDeviation=self._speed_deviation,
         )
 
-    def _compute_aim_value(self, mods: list, attributes) -> float:
+    def _compute_aim_value(self, score: ScoreInfo, attributes: OsuDifficultyAttributes) -> float:
         """Return the aim portion of the score's performance.
 
         Args:
-            mods: The mods the score was set with.
+            score: The score being evaluated.
             attributes: The beatmap's difficulty attributes.
         """
+        mods = score.Mods
         if any(isinstance(m, OsuModAutopilot) for m in mods):
             return 0.0
 
@@ -285,25 +291,21 @@ class OsuPerformanceCalculator(PerformanceCalculator):
                 # Classic scores cannot report dropped ends, so every point of
                 # missing combo is treated as a dropped difficult slider.
                 maximum_possible_dropped_sliders = self._total_imperfect_hits
-                estimate = min(
-                    max(
-                        min(
-                            maximum_possible_dropped_sliders,
-                            attributes.MaxCombo - self._score_max_combo,
-                        ),
-                        0,
+                estimate = Clamp(
+                    min(
+                        maximum_possible_dropped_sliders,
+                        attributes.MaxCombo - self._score_max_combo
                     ),
-                    attributes.AimDifficultSliderCount,
+                    0.0,
+                    attributes.AimDifficultSliderCount
                 )
             else:
                 # Tick misses count too; plain misses do not, because missing a
                 # slider head is punished harshly on its own.
-                estimate = min(
-                    max(
-                        self._count_slider_ends_dropped + self._count_slider_tick_miss,
-                        0,
-                    ),
-                    attributes.AimDifficultSliderCount,
+                estimate = Clamp(
+                    self._count_slider_ends_dropped + self._count_slider_tick_miss,
+                    0.0,
+                    attributes.AimDifficultSliderCount
                 )
 
             slider_nerf_factor = (1 - attributes.SliderFactor) * DiffUtils.Pow(
@@ -324,7 +326,7 @@ class OsuPerformanceCalculator(PerformanceCalculator):
         )
         aim_value *= length_bonus
 
-        if self._effective_miss_count > 0:
+        if self._effective_miss_count > 0.0:
             relevant_miss_count = min(
                 self._effective_miss_count + self._aim_estimated_slider_breaks,
                 self._total_imperfect_hits + self._count_slider_tick_miss,
@@ -345,13 +347,14 @@ class OsuPerformanceCalculator(PerformanceCalculator):
 
         return aim_value * self._accuracy
 
-    def _compute_speed_value(self, mods: list, attributes) -> float:
+    def _compute_speed_value(self, score: ScoreInfo, attributes: OsuDifficultyAttributes) -> float:
         """Return the speed portion of the score's performance.
 
         Args:
-            mods: The mods the score was set with.
+            score: The score being evaluated.
             attributes: The beatmap's difficulty attributes.
         """
+        mods = score.Mods
         if any(isinstance(m, OsuModRelax) for m in mods) or self._speed_deviation is None:
             return 0.0
 
@@ -384,13 +387,14 @@ class OsuPerformanceCalculator(PerformanceCalculator):
 
         return speed_value * DiffUtils.Pow(effective_accuracy, 2)
 
-    def _compute_accuracy_value(self, mods: list, attributes) -> float:
+    def _compute_accuracy_value(self, score: ScoreInfo, attributes: OsuDifficultyAttributes) -> float:
         """Return the accuracy portion of the score's performance.
 
         Args:
-            mods: The mods the score was set with.
+            score: The score being evaluated.
             attributes: The beatmap's difficulty attributes.
         """
+        mods = score.Mods
         if any(isinstance(m, OsuModRelax) for m in mods):
             return 0.0
 
@@ -408,12 +412,13 @@ class OsuPerformanceCalculator(PerformanceCalculator):
                 * 6
                 + self._count_ok * 2
                 + self._count_meh
-            ) / (amount_hit_objects_with_accuracy * 6)
+            ) / float(amount_hit_objects_with_accuracy * 6)
         else:
             better_accuracy_percentage = 0.0
 
         # The formula above can go negative; that is worth nothing, not less.
-        better_accuracy_percentage = max(0.0, better_accuracy_percentage)
+        if better_accuracy_percentage < 0.0:
+            better_accuracy_percentage = 0.0
 
         accuracy_value = (
             DiffUtils.Pow(1.52163, self._overall_difficulty)
@@ -437,7 +442,7 @@ class OsuPerformanceCalculator(PerformanceCalculator):
 
         return accuracy_value
 
-    def _compute_reading_value(self, attributes) -> float:
+    def _compute_reading_value(self, attributes: OsuDifficultyAttributes) -> float:
         """Return the reading portion of the score's performance.
 
         Args:
@@ -454,18 +459,21 @@ class OsuPerformanceCalculator(PerformanceCalculator):
             )
 
         # Reading scales harshly with accuracy.
-        return reading_value * DiffUtils.Pow(self._accuracy, 3)
+        reading_value *= DiffUtils.Pow(self._accuracy, 3)
+        return reading_value
 
-    def _compute_flashlight_value(self, mods: list, attributes) -> float:
+    def _compute_flashlight_value(self, score: ScoreInfo, attributes: OsuDifficultyAttributes) -> float:
         """Return the flashlight portion of the score's performance.
 
         Args:
-            mods: The mods the score was set with.
+            score: The score being evaluated.
             attributes: The beatmap's difficulty attributes.
         """
+        mods = score.Mods
         if not any(isinstance(m, OsuModFlashlight) for m in mods):
             return 0.0
 
+        assert attributes.FlashlightDifficulty is not None
         flashlight_value = Flashlight.DifficultyToPerformance(
             attributes.FlashlightDifficulty
         )
@@ -480,9 +488,10 @@ class OsuPerformanceCalculator(PerformanceCalculator):
         flashlight_value *= self._combo_scaling_factor(attributes)
 
         # Flashlight scales only slightly with accuracy.
-        return flashlight_value * (0.5 + self._accuracy / 2.0)
+        flashlight_value *= 0.5 + self._accuracy / 2.0
+        return flashlight_value
 
-    def _combo_based_estimated_miss_count(self, attributes) -> float:
+    def _combo_based_estimated_miss_count(self, attributes: OsuDifficultyAttributes) -> float:
         """Estimate how many mistakes a score's combo implies.
 
         A slider break costs combo without recording a miss, so the combo a
@@ -537,13 +546,12 @@ class OsuPerformanceCalculator(PerformanceCalculator):
         return miss_count
 
     def _estimated_slider_breaks(
-        self, top_weighted_slider_factor: float, attributes
+        self, top_weighted_slider_factor: float, attributes: OsuDifficultyAttributes
     ) -> float:
         """Estimate how many of a score's mistakes were slider breaks.
 
         Args:
-            top_weighted_slider_factor: How much of the difficulty sits on
-                sliders for the skill in question.
+            top_weighted_slider_factor: How much of the difficulty sits on sliders for the skill in question.
             attributes: The beatmap's difficulty attributes.
         """
         non_miss_mistakes = self._count_ok + self._count_meh
@@ -551,7 +559,7 @@ class OsuPerformanceCalculator(PerformanceCalculator):
         if not self._using_classic_slider_accuracy or non_miss_mistakes == 0:
             return 0.0
 
-        missed_combo_percent = 1.0 - self._score_max_combo / attributes.MaxCombo
+        missed_combo_percent = 1.0 - float(self._score_max_combo) / attributes.MaxCombo
 
         estimated_slider_breaks = min(
             non_miss_mistakes, self._effective_miss_count * top_weighted_slider_factor
@@ -575,7 +583,7 @@ class OsuPerformanceCalculator(PerformanceCalculator):
             * DiffUtils.Logistic(missed_combo_percent, 0.33, 15)
         )
 
-    def _calculate_speed_deviation(self, attributes) -> float | None:
+    def _calculate_speed_deviation(self, attributes: OsuDifficultyAttributes) -> float | None:
         """Estimate the player's tapping deviation, in milliseconds.
 
         Args:
@@ -678,7 +686,7 @@ class OsuPerformanceCalculator(PerformanceCalculator):
             / (relevant_count_great + relevant_count_ok + relevant_count_meh)
         )
 
-    def _speed_high_deviation_nerf(self, attributes) -> float:
+    def _speed_high_deviation_nerf(self, attributes: OsuDifficultyAttributes) -> float:
         """Return a multiplier reducing speed value for imprecise tapping.
 
         Args:
@@ -741,7 +749,7 @@ class OsuPerformanceCalculator(PerformanceCalculator):
 
         return traceable_bonus
 
-    def _combo_scaling_factor(self, attributes) -> float:
+    def _combo_scaling_factor(self, attributes: OsuDifficultyAttributes) -> float:
         """Return how much of the maximum combo the score reached.
 
         Args:
@@ -752,7 +760,7 @@ class OsuPerformanceCalculator(PerformanceCalculator):
         return min(
             DiffUtils.Pow(self._score_max_combo, 0.8)
             / DiffUtils.Pow(attributes.MaxCombo, 0.8),
-            1.0,
+            1.0
         )
 
 
@@ -794,17 +802,3 @@ def _rate_adjusted_approach_rate(approach_rate: float, clock_rate: float) -> flo
     return BeatmapDifficulty.InverseDifficultyRange(
         preempt, PREEMPT_MAX, PREEMPT_MID, PREEMPT_MIN
     )
-
-
-def _clock_rate_with_mods(mods: list) -> float:
-    """Return the rate a set of mods plays a beatmap at.
-
-    Args:
-        mods: The mods the score was set with.
-    """
-    rate = 1.0
-    for mod in mods:
-        apply = getattr(mod, "ApplyToRate", None)
-        if callable(apply):
-            rate = apply(0.0, rate)
-    return rate

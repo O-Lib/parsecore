@@ -25,6 +25,8 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
+from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
 from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 from parsecore.Rulesets.Osu.Objects.SpinnerTick import SpinnerBonusTick, SpinnerTick
 from parsecore.Utils.Vector2 import Vector2, f32
@@ -43,19 +45,14 @@ BONUS_SPINS_GAP = 2
 DURATION_ERROR = 0.0001
 
 
-class Spinner(OsuHitObject):
+class Spinner(OsuHitObject, IHasDuration):
     """An object spun for a duration."""
 
-    def __init__(self, start_time: float = 0.0, end_time: float = 0.0, position=None) -> None:
+    def __init__(self) -> None:
         """Create a spinner.
-
-        Args:
-            start_time: The spinner's start in milliseconds.
-            end_time: The spinner's end in milliseconds.
-            position: The spinner's centre.
         """
-        super().__init__(start_time, position)
-        self.EndTime: float = end_time
+        super().__init__()
+        self.Duration: float = 0.0
         self.SpinsRequired: int = 1
         self.MaximumBonusSpins: int = 1
 
@@ -65,9 +62,14 @@ class Spinner(OsuHitObject):
         return self.SpinsRequired + BONUS_SPINS_GAP
 
     @property
-    def Duration(self) -> float:
-        """Return how long the spinner lasts."""
-        return self.EndTime - self.StartTime
+    def EndTime(self) -> float:
+        """Return the end time of the spinner in milliseconds."""
+        return self.StartTime + self.Duration
+
+    @EndTime.setter
+    def EndTime(self, value: float) -> None:
+        """Set the end time of the spinner in milliseconds."""
+        self.Duration = value - self.StartTime
 
     @property
     def StackOffset(self) -> Vector2:
@@ -78,7 +80,7 @@ class Spinner(OsuHitObject):
         """
         return Vector2()
 
-    def ApplyDefaultsToSelf(self, control_point_info, difficulty) -> None:
+    def ApplyDefaultsToSelf(self, control_point_info: ControlPointInfo, difficulty: BeatmapDifficulty) -> None:
         """Derive the required and bonus spin counts from the beatmap.
 
         Args:
@@ -122,6 +124,8 @@ class Spinner(OsuHitObject):
 
     def CreateNestedHitObjects(self) -> None:
         """Generate one nested tick for every spin of this spinner."""
+        super().CreateNestedHitObjects()
+
         total_spins = self.MaximumBonusSpins + self.SpinsRequired + BONUS_SPINS_GAP
 
         for i in range(total_spins):
@@ -129,10 +133,13 @@ class Spinner(OsuHitObject):
             # times are not quite the even division they look like.
             start_time = self.StartTime + f32((i + 1) / total_spins) * self.Duration
 
-            tick = (
-                SpinnerTick(start_time)
-                if i < self.SpinsRequiredForBonus
-                else SpinnerBonusTick(start_time)
-            )
-            tick.SpinnerDuration = self.Duration
-            self.AddNested(tick)
+            spinner_tick = SpinnerTick()
+            spinner_tick.StartTime = start_time
+            spinner_tick.SpinnerDuration = self.Duration
+
+            spinner_bonus_tick = SpinnerBonusTick()
+            spinner_bonus_tick.StartTime = start_time
+            spinner_bonus_tick.SpinnerDuration = self.Duration
+            spinner_bonus_tick.Samples = [self.CreateHitSampleInfo("spinnerbonus")]
+
+            self.AddNested(spinner_tick if i < self.SpinsRequiredForBonus else spinner_bonus_tick)

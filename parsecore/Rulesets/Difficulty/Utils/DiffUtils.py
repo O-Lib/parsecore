@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import math
 
+from parsecore.Utils.Precision import Clamp
+
 SQRT2 = 1.4142135623730950
 
 
@@ -202,7 +204,7 @@ def ReverseLerp(x: float, start: float, end: float) -> float:
     """
     if start == end:
         return 0.0
-    return min(max((x - start) / (end - start), 0.0), 1.0)
+    return Clamp((x - start) / (end - start), 0.0, 1.0)
 
 
 def Norm(p: float, *values: float) -> float:

@@ -35,16 +35,13 @@ DEFAULT_STRONG_SIZE = 0.475 * STRONG_SCALE
 class TaikoStrongableHitObject(TaikoHitObject):
     """A note that is strong when it carries a finish sample."""
 
-    def __init__(self, start_time: float = 0.0) -> None:
-        """Create a strongable object.
-
-        Args:
-            start_time: The object's time in milliseconds.
-        """
+    def __init__(self) -> None:
+        """Create a strongable object."""
         # Set before the base class, which assigns empty samples and so reads
         # this back through the setter below.
         self._is_strong = False
-        super().__init__(start_time)
+        super().__init__()
+        self._read_from_samples()
 
     @property
     def IsStrong(self) -> bool:
@@ -69,43 +66,6 @@ class TaikoStrongableHitObject(TaikoHitObject):
         self._is_strong = value
         self._write_strength_to_samples()
 
-    @property
-    def Samples(self) -> list:
-        """Return the samples played when this object is hit."""
-        return self._samples
-
-    @Samples.setter
-    def Samples(self, value: list) -> None:
-        """Set the samples and re-read everything they imply.
-
-        Args:
-            value: The samples to play.
-        """
-        self._samples = list(value)
-        self._read_from_samples()
-
-    def _read_from_samples(self) -> None:
-        """Derive whether this note is strong from its samples.
-
-        Subclasses extend this to read the rest of what the samples encode.
-        """
-        self.IsStrong = any(s.Name == HIT_FINISH for s in self._samples)
-
-    def _write_strength_to_samples(self) -> None:
-        """Add or remove the finish sample this note's strength implies."""
-        strong_samples = [s for s in self._samples if s.Name == HIT_FINISH]
-
-        if self._is_strong == bool(strong_samples):
-            return
-
-        if self._is_strong:
-            self._samples.append(self.CreateHitSampleInfo(HIT_FINISH))
-        else:
-            for sample in strong_samples:
-                self._samples.remove(sample)
-
-        self._read_from_samples()
-
     def CreateNestedHitObjects(self) -> None:
         """Add the second hand's hit if this note is strong."""
         super().CreateNestedHitObjects()
@@ -118,5 +78,30 @@ class TaikoStrongableHitObject(TaikoHitObject):
 
         Args:
             start_time: When the second hand lands.
+
+        Returns:
+            The nested strong hit object.
         """
         raise NotImplementedError
+
+    def _read_from_samples(self) -> None:
+        """Derive whether this note is strong from its samples.
+
+        Subclasses extend this to read the rest of what the samples encode.
+        """
+        self.IsStrong = any(s.Name == HIT_FINISH for s in self.Samples)
+
+    def _write_strength_to_samples(self) -> None:
+        """Add or remove the finish sample this note's strength implies."""
+        strong_samples = [s for s in self.Samples if s.Name == HIT_FINISH]
+
+        if self._is_strong == bool(strong_samples):
+            return
+
+        if self._is_strong:
+            self.Samples.append(self.CreateHitSampleInfo(HIT_FINISH))
+        else:
+            for sample in strong_samples:
+                self.Samples.remove(sample)
+
+        self._read_from_samples()

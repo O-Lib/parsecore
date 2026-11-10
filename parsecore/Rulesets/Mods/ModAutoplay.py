@@ -25,6 +25,7 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Mods.ModTouchDevice import ModTouchDevice
 from parsecore.Rulesets.Mods.ModType import ModType
 
 
@@ -35,4 +36,13 @@ class ModAutoplay(Mod):
     Acronym = "AT"
     Description = "Watch a perfect automated play through the song."
     Type = ModType.Automation
-    ScoreMultiplier = 1.0
+
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Autoplay.
+
+        Returns:
+            A list of incompatible mod classes.
+        """
+        from parsecore.Rulesets.Mods.ModRelax import ModRelax
+        return [type(ModRelax), type(ModTouchDevice)]

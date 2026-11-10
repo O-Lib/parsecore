@@ -26,12 +26,14 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from parsecore.Rulesets.Objects.HitObject import HitObject
+
 
 @runtime_checkable
 class IApplicableToHitObject(Protocol):
     """A mod that rewrites each hit object before it is stacked."""
 
-    def ApplyToHitObject(self, hit_object) -> None:
+    def ApplyToHitObject(self, hit_object: HitObject) -> None:
         """Modify a single hit object in place.
 
         Args:

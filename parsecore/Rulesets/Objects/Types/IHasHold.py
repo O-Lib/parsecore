@@ -31,4 +31,4 @@ from typing import Protocol, runtime_checkable
 class IHasHold(Protocol):
     """A mania hold note."""
 
-    end_time: float
+    EndTime: float

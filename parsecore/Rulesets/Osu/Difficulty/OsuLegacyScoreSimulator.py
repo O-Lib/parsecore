@@ -24,10 +24,28 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
+from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Mods.ModScoreV2 import ModScoreV2
+from parsecore.Rulesets.Objects.HitObject import HitObject
 from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
     CalculateDifficultyPeppyStars,
 )
 from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
+from parsecore.Rulesets.Objects.Types.IHasPath import IHasPath
+from parsecore.Rulesets.Osu.Mods.OsuModAutopilot import OsuModAutopilot
+from parsecore.Rulesets.Osu.Mods.OsuModDaycore import OsuModDaycore
+from parsecore.Rulesets.Osu.Mods.OsuModDoubleTime import OsuModDoubleTime
+from parsecore.Rulesets.Osu.Mods.OsuModEasy import OsuModEasy
+from parsecore.Rulesets.Osu.Mods.OsuModFlashlight import OsuModFlashlight
+from parsecore.Rulesets.Osu.Mods.OsuModHalfTime import OsuModHalfTime
+from parsecore.Rulesets.Osu.Mods.OsuModHardRock import OsuModHardRock
+from parsecore.Rulesets.Osu.Mods.OsuModHidden import OsuModHidden
+from parsecore.Rulesets.Osu.Mods.OsuModNightcore import OsuModNightcore
+from parsecore.Rulesets.Osu.Mods.OsuModNoFail import OsuModNoFail
+from parsecore.Rulesets.Osu.Mods.OsuModRelax import OsuModRelax
+from parsecore.Rulesets.Osu.Mods.OsuModSpunOut import OsuModSpunOut
 from parsecore.Rulesets.Osu.Objects.HitCircle import HitCircle
 from parsecore.Rulesets.Osu.Objects.Slider import Slider
 from parsecore.Rulesets.Osu.Objects.SliderHeadCircle import SliderHeadCircle
@@ -50,24 +68,6 @@ MAXIMUM_ROTATIONS_PER_SECOND = 477.0 / 60
 
 MINIMUM_ROTATIONS_PER_SECOND = 3
 
-# What the mods multiply an osu!stable score by, and what they multiply it by
-# once the second scoring version is in play.
-MOD_MULTIPLIERS = {
-    "NF": (0.5, 1.0),
-    "EZ": (0.5, 0.5),
-    "HT": (0.3, 0.3),
-    "DC": (0.3, 0.3),
-    "HD": (1.06, 1.06),
-    "HR": (1.06, 1.10),
-    "DT": (1.12, 1.20),
-    "NC": (1.12, 1.20),
-    "FL": (1.12, 1.12),
-    "SO": (0.9, 0.9),
-}
-
-# Mods osu!stable refused to score at all.
-UNSCORED_MODS = ("RX", "AP")
-
 
 class OsuLegacyScoreSimulator(ILegacyScoreSimulator):
     """Simulates a perfect osu! play under osu!stable's first scoring system."""
@@ -79,19 +79,21 @@ class OsuLegacyScoreSimulator(ILegacyScoreSimulator):
         self._combo = 0
         self._score_multiplier = 0.0
 
-    def Simulate(self, beatmap, playable_beatmap) -> LegacyScoreAttributes:
+    def Simulate(self, workingBeatmap: WorkingBeatmap, playable_beatmap: Beatmap) -> LegacyScoreAttributes:
         """Return the highest osu!stable score a beatmap allows.
 
         Args:
-            beatmap: The beatmap as it was decoded.
-            playable_beatmap: The same beatmap as osu! plays it.
+            workingBeatmap: The working beatmap.
+            playable_beatmap: A playable version of the beatmap for the ruleset.
         """
+        base_beatmap = workingBeatmap.Beatmap
+
         count_normal = 0
         count_slider = 0
         count_spinner = 0
 
-        for hit_object in beatmap.HitObjects:
-            if hasattr(hit_object, "Path"):
+        for hit_object in workingBeatmap.Beatmap.HitObjects:
+            if isinstance(hit_object, IHasPath):
                 count_slider += 1
             elif isinstance(hit_object, IHasDuration):
                 count_spinner += 1
@@ -102,23 +104,23 @@ class OsuLegacyScoreSimulator(ILegacyScoreSimulator):
 
         drain_length = 0
 
-        if beatmap.HitObjects:
+        if base_beatmap.HitObjects:
             break_length = sum(
                 int(round(b.EndTime)) - int(round(b.StartTime))
-                for b in beatmap.Breaks
+                for b in base_beatmap.Breaks
             )
             # osu! divides two whole numbers here, truncating towards zero.
             drain_length = int(
                 (
-                    int(round(beatmap.HitObjects[-1].StartTime))
-                    - int(round(beatmap.HitObjects[0].StartTime))
+                    int(round(base_beatmap.HitObjects[-1].StartTime))
+                    - int(round(base_beatmap.HitObjects[0].StartTime))
                     - break_length
                 )
                 / 1000
             )
 
         self._score_multiplier = CalculateDifficultyPeppyStars(
-            beatmap.Difficulty, object_count, drain_length
+            base_beatmap.Difficulty, object_count, drain_length
         )
 
         attributes = LegacyScoreAttributes()
@@ -129,14 +131,14 @@ class OsuLegacyScoreSimulator(ILegacyScoreSimulator):
         attributes.BonusScoreRatio = (
             0.0
             if self._legacy_bonus_score == 0
-            else self._standardised_bonus_score / self._legacy_bonus_score
+            else float(self._standardised_bonus_score) / self._legacy_bonus_score
         )
         attributes.BonusScore = self._legacy_bonus_score
         attributes.MaxCombo = self._combo
 
         return attributes
 
-    def _simulate_hit(self, hit_object, attributes: LegacyScoreAttributes) -> None:
+    def _simulate_hit(self, hit_object: HitObject, attributes: LegacyScoreAttributes) -> None:
         """Add what one object is worth to the running score.
 
         Args:
@@ -188,7 +190,7 @@ class OsuLegacyScoreSimulator(ILegacyScoreSimulator):
             # Another one and a half spins are needed before a bonus is paid.
             half_spins_required_before_bonus = half_spins_required_for_completion + 3
 
-            for i in range(total_half_spins_possible + 1):
+            for i in range(total_half_spins_possible):
                 if (
                     i > half_spins_required_before_bonus
                     and (i - half_spins_required_before_bonus) % 2 == 0
@@ -219,33 +221,36 @@ class OsuLegacyScoreSimulator(ILegacyScoreSimulator):
         if increase_combo:
             self._combo += 1
 
-    def GetLegacyScoreMultiplier(self, mods: list, difficulty=None) -> float:
+    @staticmethod
+    def GetLegacyScoreMultiplier(mods: list[Mod]) -> float:
         """Return what the mods multiply an osu!stable score by.
 
         Args:
             mods: The mods the score was set with.
-            difficulty: Unused by osu!; the other rulesets read it.
         """
-        return GetLegacyScoreMultiplier(mods)
 
+        score_v2 = any(isinstance(m, ModScoreV2) for m in mods)
 
-def GetLegacyScoreMultiplier(mods: list) -> float:
-    """Return what the mods multiply an osu!stable score by.
+        multiplier = 1.0
 
-    Args:
-        mods: The mods the score was set with.
-    """
-    acronyms = [getattr(mod, "Acronym", None) for mod in mods]
-    score_v2 = "SV2" in acronyms
+        for mod in mods:
+            if isinstance(mod, OsuModNoFail):
+                multiplier *= 1.0 if score_v2 else 0.5
+            elif isinstance(mod, OsuModEasy):
+                multiplier *= 0.5
+            elif isinstance(mod, (OsuModHalfTime, OsuModDaycore)):
+                multiplier *= 0.3
+            elif isinstance(mod, OsuModHidden):
+                multiplier *= 1.06
+            elif isinstance(mod, OsuModHardRock):
+                multiplier *= 1.10 if score_v2 else 1.06
+            elif isinstance(mod, (OsuModDoubleTime, OsuModNightcore)):
+                multiplier *= 1.20 if score_v2 else 1.12
+            elif isinstance(mod, OsuModFlashlight):
+                multiplier *= 1.12
+            elif isinstance(mod, OsuModSpunOut):
+                multiplier *= 0.9
+            elif isinstance(mod, (OsuModRelax, OsuModAutopilot)):
+                return 0.0
 
-    multiplier = 1.0
-
-    for acronym in acronyms:
-        if acronym in UNSCORED_MODS:
-            return 0.0
-
-        pair = MOD_MULTIPLIERS.get(acronym)
-        if pair is not None:
-            multiplier *= pair[1] if score_v2 else pair[0]
-
-    return multiplier
+        return multiplier

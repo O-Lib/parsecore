@@ -24,30 +24,41 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import math
 import re
 
 from parsecore.Audio.HitSampleInfo import BANK_NORMAL
 from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
 from parsecore.Beatmaps.ControlPoints.ControlPoint import ControlPoint
+from parsecore.Beatmaps.ControlPoints.DifficultyControlPoint import DEFAULT as DP
 from parsecore.Beatmaps.ControlPoints.DifficultyControlPoint import (
     DifficultyControlPoint,
 )
 from parsecore.Beatmaps.ControlPoints.EffectControlPoint import EffectControlPoint
-from parsecore.Beatmaps.ControlPoints.SampleControlPoint import SampleControlPoint
+from parsecore.Beatmaps.ControlPoints.SampleControlPoint import DEFAULT as SP
 from parsecore.Beatmaps.ControlPoints.TimingControlPoint import TimingControlPoint
 from parsecore.Beatmaps.CountdownType import CountdownType
 from parsecore.Beatmaps.Formats import Parsing
 from parsecore.Beatmaps.Formats.LegacyDecoder import LegacyDecoder, Section
-from parsecore.Beatmaps.Legacy.LegacyControlPointInfo import LegacyControlPointInfo
+from parsecore.Beatmaps.Legacy.LegacyControlPointInfo import (
+    LegacyControlPointInfo,
+    LegacySampleControlPoint,
+)
 from parsecore.Beatmaps.Legacy.LegacyEffectFlags import LegacyEffectFlags
 from parsecore.Beatmaps.Legacy.LegacyEventType import LegacyEventType
 from parsecore.Beatmaps.Legacy.LegacySampleBank import LegacySampleBank
 from parsecore.Beatmaps.Timing.BreakPeriod import BreakPeriod
 from parsecore.Beatmaps.Timing.TimeSignature import SIMPLE_QUADRUPLE, TimeSignature
-from parsecore.Rulesets.Objects.HitObject import CONTROL_POINT_LENIENCY
+from parsecore.Rulesets.Objects.HitObject import CONTROL_POINT_LENIENCY, HitObject
+from parsecore.Rulesets.Objects.Legacy.ConvertHitObject import ConvertHitObject
 from parsecore.Rulesets.Objects.Legacy.ConvertHitObjectParser import (
     ConvertHitObjectParser,
 )
+from parsecore.Rulesets.Objects.Types.IHasGenerateTicks import IHasGenerateTicks
+from parsecore.Rulesets.Objects.Types.IHasRepeats import IHasRepeats, SpanCount
+from parsecore.Rulesets.Objects.Types.IHasSliderVelocity import IHasSliderVelocity
+from parsecore.Utils.Precision import Clamp
 
 LATEST_VERSION = 14
 EARLY_VERSION_TIMING_OFFSET = 24
@@ -86,14 +97,16 @@ class LegacyBeatmapDecoder(LegacyDecoder):
         self.offset = (
             EARLY_VERSION_TIMING_OFFSET if format_version < 5 else 0.0
         )
-        self._beatmap: Beatmap | None = None
-        self._parser: ConvertHitObjectParser | None = None
+        self._beatmap: Beatmap = Beatmap()
+        self._parser: ConvertHitObjectParser = ConvertHitObjectParser()
         self._default_sample_bank = LegacySampleBank.Normal
         self._default_sample_volume = 100
         self._has_approach_rate = False
         self._pending_control_points: list[ControlPoint] = []
         self._pending_control_point_types: set[type] = set()
         self._pending_control_points_time = 0.0
+
+        self.ApplyOffsets: bool = True
 
     @classmethod
     def FromPath(cls, path: str) -> Beatmap:
@@ -139,52 +152,56 @@ class LegacyBeatmapDecoder(LegacyDecoder):
         Returns:
             The decoded beatmap.
         """
-        beatmap = Beatmap()
-        beatmap.BeatmapInfo.BeatmapVersion = self.FormatVersion
-        beatmap.ControlPointInfo = LegacyControlPointInfo()
-        self._beatmap = beatmap
-        self._parser = ConvertHitObjectParser(self.offset, self.FormatVersion)
+        output = _create_template_object()
+        self.ParseStreamInto(lines, output)
+        return output
 
-        self.ParseStreamInto(lines, beatmap)
+    def ParseStreamInto(self, lines: list[str], output: Beatmap) -> None:
+        """Parse lines from a .osu file into an existing beatmap instance.
 
-        if not self._has_approach_rate:
-            # Older maps have no AR; it mirrors OD.
-            beatmap.Difficulty.ApproachRate = beatmap.Difficulty.OverallDifficulty
+        Args:
+            lines: The file's lines without line endings.
+            output: The beatmap object to populate.
+        """
+        self._beatmap = output
+        self._beatmap.BeatmapInfo.BeatmapVersion = self.FormatVersion
+        self._parser = ConvertHitObjectParser(self._get_offset_time(), self.FormatVersion)
 
-        self._apply_difficulty_restrictions(beatmap.Difficulty, beatmap)
+        self._beatmap.BeatmapInfo.WidescreenStoryboard = False
+
+        super().ParseStreamInto(lines, output)
+        self._apply_difficulty_restrictions(output.Difficulty, output)
+
         self._flush_pending_points()
+        
+        self._beatmap.HitObjects = sorted(self._beatmap.HitObjects, key=lambda h: h.StartTime)
 
-        beatmap.HitObjects.sort(key=lambda h: h.StartTime)
-        self._post_process_breaks(beatmap)
-        self._apply_defaults(beatmap)
-        return beatmap
+        self._post_process_breaks(self._beatmap)
+
+        for hit_object in self._beatmap.HitObjects:
+            self._apply_defaults(hit_object)
+            self._apply_samples(hit_object)
 
     @staticmethod
-    def _apply_difficulty_restrictions(difficulty, beatmap: Beatmap) -> None:
+    def _apply_difficulty_restrictions(difficulty: BeatmapDifficulty, beatmap: Beatmap) -> None:
         """Clamp every difficulty setting to the range osu! accepts.
 
         Args:
             difficulty: The difficulty settings to clamp.
             beatmap: The beatmap they belong to.
         """
-        difficulty.DrainRate = min(max(difficulty.DrainRate, 0.0), 10.0)
+        difficulty.DrainRate = Clamp(difficulty.DrainRate, 0.0, 10.0)
 
         if beatmap.BeatmapInfo.RulesetID != 3:
-            difficulty.CircleSize = min(max(difficulty.CircleSize, 0.0), 10.0)
+            difficulty.CircleSize = Clamp(difficulty.CircleSize, 0.0, 10.0)
         else:
             # Mania reads circle size as a key count, so it has its own range.
-            difficulty.CircleSize = min(
-                max(difficulty.CircleSize, 1.0), MAX_MANIA_KEY_COUNT
-            )
+            difficulty.CircleSize = Clamp(difficulty.CircleSize, 1.0, MAX_MANIA_KEY_COUNT)
 
-        difficulty.OverallDifficulty = min(
-            max(difficulty.OverallDifficulty, 0.0), 10.0
-        )
-        difficulty.ApproachRate = min(max(difficulty.ApproachRate, 0.0), 10.0)
-        difficulty.SliderMultiplier = min(
-            max(difficulty.SliderMultiplier, 0.4), 3.6
-        )
-        difficulty.SliderTickRate = min(max(difficulty.SliderTickRate, 0.5), 8.0)
+        difficulty.OverallDifficulty = Clamp(difficulty.OverallDifficulty, 0.0, 10.0)
+        difficulty.ApproachRate = Clamp(difficulty.ApproachRate, 0.0, 10.0)
+        difficulty.SliderMultiplier = Clamp(difficulty.SliderMultiplier, 0.4, 3.6)
+        difficulty.SliderTickRate = Clamp(difficulty.SliderTickRate, 0.5, 8.0)
 
     @staticmethod
     def _post_process_breaks(beatmap: Beatmap) -> None:
@@ -197,20 +214,18 @@ class LegacyBeatmapDecoder(LegacyDecoder):
         force_new_combo = False
 
         for hit_object in beatmap.HitObjects:
-            if not hasattr(hit_object, "NewCombo"):
-                continue
+            if isinstance(hit_object, ConvertHitObject):
+                while (
+                    current_break < len(beatmap.Breaks)
+                    and beatmap.Breaks[current_break].EndTime < hit_object.StartTime
+                ):
+                    force_new_combo = True
+                    current_break += 1
 
-            while (
-                current_break < len(beatmap.Breaks)
-                and beatmap.Breaks[current_break].EndTime < hit_object.StartTime
-            ):
-                force_new_combo = True
-                current_break += 1
+                hit_object.NewCombo |= force_new_combo
+                force_new_combo = False
 
-            hit_object.NewCombo = hit_object.NewCombo or force_new_combo
-            force_new_combo = False
-
-    def ParseLine(self, output, section: Section, line: str) -> None:
+    def ParseLine(self, output: Beatmap, section: Section, line: str) -> None:
         """Dispatch one line to its section handler.
 
         Args:
@@ -234,6 +249,8 @@ class LegacyBeatmapDecoder(LegacyDecoder):
             case Section.HitObjects:
                 self._handle_hit_object(line)
 
+        super().ParseLine(output, section, line)
+
     def _handle_general(self, line: str) -> None:
         """Parse one ``[General]`` line.
 
@@ -251,7 +268,7 @@ class LegacyBeatmapDecoder(LegacyDecoder):
                 info.AudioLeadIn = Parsing.ParseInt(value)
             case "PreviewTime":
                 time = Parsing.ParseInt(value)
-                metadata.PreviewTime = -1 if time == -1 else int(time + self.offset)
+                metadata.PreviewTime = -1 if time == -1 else int(self._get_offset_time(time))
             case "SampleSet":
                 self._default_sample_bank = LegacySampleBank[value]
             case "SampleVolume":
@@ -400,7 +417,7 @@ class LegacyBeatmapDecoder(LegacyDecoder):
         Args:
             line: The raw line.
         """
-        split = self.StripComments(line).strip().split(",")
+        split = line.split(",")
         if len(split) < 2:
             return
 
@@ -450,7 +467,7 @@ class LegacyBeatmapDecoder(LegacyDecoder):
             string_sample_set = BANK_NORMAL
 
         if timing_change:
-            if beat_length != beat_length:  # NaN
+            if math.isnan(beat_length):  # NaN
                 return
             point = TimingControlPoint(
                 BeatLength=beat_length,
@@ -461,8 +478,9 @@ class LegacyBeatmapDecoder(LegacyDecoder):
 
         ruleset_id = self._beatmap.BeatmapInfo.RulesetID
 
-        difficulty_point = LegacyDifficultyControlPoint(
-            beat_length=beat_length, SliderVelocity=speed_multiplier
+        difficulty_point = DifficultyControlPoint(
+            GenerateTicks=not math.isnan(beat_length),
+            SliderVelocity=speed_multiplier
         )
         self._add_control_point(time, difficulty_point, timing_change)
 
@@ -472,11 +490,10 @@ class LegacyBeatmapDecoder(LegacyDecoder):
             effect_point.ScrollSpeed = speed_multiplier
         self._add_control_point(time, effect_point, timing_change)
 
-        sample_point = SampleControlPoint(
-            SampleBank=string_sample_set,
-            SampleVolume=sample_volume,
-            CustomSampleBank=custom_sample_bank,
-        )
+        sample_point = LegacySampleControlPoint()
+        sample_point.SampleBank = string_sample_set
+        sample_point.SampleVolume = sample_volume
+        sample_point.CustomSampleBank = custom_sample_bank
         self._add_control_point(time, sample_point, timing_change)
 
     def _handle_hit_object(self, line: str) -> None:
@@ -487,6 +504,7 @@ class LegacyBeatmapDecoder(LegacyDecoder):
         """
         obj = self._parser.Parse(line)
         if obj is not None:
+            obj.ApplyDefaults(self._beatmap.ControlPointInfo, self._beatmap.Difficulty)
             self._beatmap.HitObjects.append(obj)
 
     def _add_control_point(
@@ -526,26 +544,37 @@ class LegacyBeatmapDecoder(LegacyDecoder):
         self._pending_control_points.clear()
         self._pending_control_point_types.clear()
 
-    def _get_offset_time(self, time: float) -> float:
+    def _get_offset_time(self, time: float | None = None) -> float:
         """Return a time with the early-format offset applied.
 
         Args:
             time: The raw time from the file.
         """
-        return time + self.offset
+        if time:
+            return time + (self.offset if self.ApplyOffsets else 0)
 
-    def _apply_defaults(self, beatmap: Beatmap) -> None:
+        return self.offset if self.ApplyOffsets else 0.0
+
+    def _apply_defaults(self, hit_object: HitObject) -> None:
         """Apply control points and difficulty to every hit object.
 
         Args:
-            beatmap: The beatmap whose objects to finalise.
+            hit_object: Beatmap's hit object.
         """
-        for hit_object in beatmap.HitObjects:
-            hit_object.ApplyDefaults(beatmap.ControlPointInfo, beatmap.Difficulty)
-            self._apply_samples(beatmap, hit_object)
+        difficulty_control_point = DP
+        control_point_info = self._beatmap.ControlPointInfo
+        if isinstance(control_point_info, LegacyControlPointInfo):
+            difficulty_control_point = control_point_info.DifficultyPointAt(hit_object.StartTime)
 
-    @staticmethod
-    def _apply_samples(beatmap: Beatmap, hit_object) -> None:
+        if isinstance(hit_object, IHasGenerateTicks):
+            hit_object.GenerateTicks = difficulty_control_point.GenerateTicks
+
+        if isinstance(hit_object, IHasSliderVelocity):
+            hit_object.SliderVelocityMultiplier = difficulty_control_point.SliderVelocity
+
+        hit_object.ApplyDefaults(self._beatmap.ControlPointInfo, self._beatmap.Difficulty)
+
+    def _apply_samples(self, hit_object: HitObject) -> None:
         """Fill in the bank and volume the control points give an object.
 
         A beatmap states an object's sounds and its banks separately: the
@@ -553,33 +582,40 @@ class LegacyBeatmapDecoder(LegacyDecoder):
         sound like. The two are joined here.
 
         Args:
-            beatmap: The beatmap being decoded.
             hit_object: The object to complete.
         """
-        sample_point_at = getattr(beatmap.ControlPointInfo, "SamplePointAt", None)
-        if sample_point_at is None:
-            return
-
-        node_samples = getattr(hit_object, "NodeSamples", None)
-
-        if node_samples is not None and hasattr(hit_object, "SpanCount"):
-            # A repeating object is sounded slightly after it starts, so the
-            # point that applies is the one a leniency later.
-            sample_point = sample_point_at(
-                hit_object.StartTime + CONTROL_POINT_LENIENCY + 1
-            )
-            hit_object.Samples = [sample_point.ApplyTo(s) for s in hit_object.Samples]
-
-            for i, samples in enumerate(node_samples):
-                time = (
-                    hit_object.StartTime
-                    + i * hit_object.Duration / hit_object.SpanCount
-                    + CONTROL_POINT_LENIENCY
+        sample_control_point = SP
+        control_point_info = self._beatmap.ControlPointInfo
+        if isinstance(hit_object, IHasRepeats):
+            if isinstance(control_point_info, LegacyControlPointInfo):
+                sample_control_point = control_point_info.SamplePointAt(
+                    hit_object.StartTime + CONTROL_POINT_LENIENCY + 1
                 )
-                node_point = sample_point_at(time)
-                node_samples[i] = [node_point.ApplyTo(s) for s in samples]
+
+            hit_object.Samples = [sample_control_point.ApplyTo(sp) for sp in hit_object.Samples]
+
+            for i in range(len(hit_object.NodeSamples)):
+                time = (
+                        hit_object.StartTime + i * hit_object.Duration
+                        / SpanCount(hit_object) + CONTROL_POINT_LENIENCY
+                )
+                node_sample_point = (
+                    control_point_info.SamplePointAt(time)
+                    if isinstance(control_point_info, LegacyControlPointInfo)
+                    else SP
+                )
+
+                hit_object.NodeSamples[i] = [node_sample_point.ApplyTo(h) for h in hit_object.NodeSamples[i]]
         else:
-            sample_point = sample_point_at(
-                hit_object.GetEndTime() + CONTROL_POINT_LENIENCY
-            )
-            hit_object.Samples = [sample_point.ApplyTo(s) for s in hit_object.Samples]
+            if isinstance(control_point_info, LegacyControlPointInfo):
+                sample_control_point = control_point_info.SamplePointAt(
+                    hit_object.GetEndTime() + CONTROL_POINT_LENIENCY
+                )
+            hit_object.Samples = [sample_control_point.ApplyTo(sp) for sp in hit_object.Samples]
+
+
+def _create_template_object() -> Beatmap:
+    """Return a empty template beatmap pre-configured with legacy control point info."""
+    beatmap = Beatmap()
+    beatmap.ControlPointInfo = LegacyControlPointInfo()
+    return beatmap

@@ -25,14 +25,27 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
+from parsecore.Rulesets.Difficulty.DifficultyAttributes import DifficultyAttributes
+from parsecore.Rulesets.Difficulty.PerformanceAttributes import PerformanceAttributes
 from parsecore.Rulesets.Difficulty.PerformanceCalculator import PerformanceCalculator
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.IApplicableToDifficulty import IApplicableToDifficulty
+from parsecore.Rulesets.Mods.ModClassic import ModClassic
+from parsecore.Rulesets.Mods.ModEasy import ModEasy
+from parsecore.Rulesets.Mods.ModFlashlight import ModFlashlight
+from parsecore.Rulesets.Mods.ModHidden import ModHidden
 from parsecore.Rulesets.Scoring.HitResult import HitResult
+from parsecore.Rulesets.Taiko.Difficulty.TaikoDifficultyAttributes import (
+    TaikoDifficultyAttributes,
+)
 from parsecore.Rulesets.Taiko.Difficulty.TaikoPerformanceAttributes import (
     TaikoPerformanceAttributes,
 )
 from parsecore.Rulesets.Taiko.Scoring.TaikoHitWindows import TaikoHitWindows
+from parsecore.Scoring.ScoreInfo import ScoreInfo
+from parsecore.Utils import ModUtils
 
 # The one-tailed 99% critical value of the normal distribution.
 DEVIATION_CONFIDENCE_Z = 2.32634787404
@@ -61,7 +74,9 @@ class TaikoPerformanceCalculator(PerformanceCalculator):
             self._count_great + self._count_ok + self._count_meh + self._count_miss
         )
 
-    def CreatePerformanceAttributes(self, score, attributes):
+    def CreatePerformanceAttributes(
+        self, score: ScoreInfo, attributes: DifficultyAttributes
+    ) -> PerformanceAttributes:
         """Return what a taiko score is worth.
 
         Args:
@@ -71,20 +86,20 @@ class TaikoPerformanceCalculator(PerformanceCalculator):
         Returns:
             The performance breakdown.
         """
-        mods = list(score.Mods)
+        mods = score.Mods
+        attributes = cast(TaikoDifficultyAttributes, attributes)
 
         self._count_great = score.GetCount(HitResult.Great)
         self._count_ok = score.GetCount(HitResult.Ok)
         self._count_meh = score.GetCount(HitResult.Meh)
         self._count_miss = max(0, score.GetCount(HitResult.Miss))
 
-        self._clock_rate = _clock_rate_with_mods(mods)
+        self._clock_rate = ModUtils.CalculateRateWithMods(mods)
 
-        difficulty = score.BeatmapDifficulty.Clone()
+        difficulty = score.BeatmapInfo.Difficulty.Clone()
         for mod in mods:
-            apply = getattr(mod, "ApplyToDifficulty", None)
-            if callable(apply):
-                apply(difficulty)
+            if isinstance(mod, IApplicableToDifficulty):
+                mod.ApplyToDifficulty(difficulty)
 
         hit_windows = TaikoHitWindows()
         hit_windows.SetDifficulty(difficulty.OverallDifficulty)
@@ -102,14 +117,14 @@ class TaikoPerformanceCalculator(PerformanceCalculator):
         # towards length; a map whose difficulty sits in a few spikes is short.
         self._total_difficult_hits = self._total_hits * attributes.ConsistencyFactor
 
-        is_convert = getattr(score, "RulesetID", TAIKO_RULESET_ID) != TAIKO_RULESET_ID
-        is_classic = _has_mod(mods, "CL")
+        is_convert = score.BeatmapInfo.RulesetID != 1
+        is_classic = any(m for m in mods if isinstance(m, ModClassic))
 
         difficulty_value = (
-            self._compute_difficulty_value(mods, attributes, is_convert, is_classic)
+            self._compute_difficulty_value(score, attributes, is_convert, is_classic)
             * 1.08
         )
-        accuracy_value = self._compute_accuracy_value(mods, attributes, is_convert) * 1.1
+        accuracy_value = self._compute_accuracy_value(score, attributes, is_convert) * 1.1
 
         return TaikoPerformanceAttributes(
             Total=difficulty_value + accuracy_value,
@@ -119,17 +134,18 @@ class TaikoPerformanceCalculator(PerformanceCalculator):
         )
 
     def _compute_difficulty_value(
-        self, mods: list, attributes, is_convert: bool, is_classic: bool
+        self, score: ScoreInfo, attributes: TaikoDifficultyAttributes, is_convert: bool, is_classic: bool
     ) -> float:
         """Return what the beatmap's difficulty is worth to this score.
 
         Args:
-            mods: The mods the score was set with.
+            score: The score was set with.
             attributes: The beatmap's difficulty.
             is_convert: Whether the beatmap was written for another ruleset.
             is_classic: Whether the score was set with the classic mod.
         """
-        if self._estimated_unstable_rate is None or self._total_difficult_hits == 0:
+        estimated_ur = self._estimated_unstable_rate
+        if estimated_ur is None or self._total_difficult_hits == 0:
             return 0.0
 
         # A rhythm-heavy beatmap played loosely is not really being read, so
@@ -141,7 +157,7 @@ class TaikoPerformanceCalculator(PerformanceCalculator):
             attributes.RhythmDifficulty / attributes.StarRating, 0.15, 0.4
         )
         rhythm_penalty = 1 - DiffUtils.Logistic(
-            self._estimated_unstable_rate,
+            estimated_ur,
             midpoint_offset=(
                 rhythm_expected_unstable_rate + rhythm_maximum_unstable_rate
             )
@@ -170,23 +186,20 @@ class TaikoPerformanceCalculator(PerformanceCalculator):
         )
         difficulty_value *= DiffUtils.Pow(miss_penalty, self._count_miss)
 
-        if _has_mod(mods, "HD"):
+        if any(m for m in score.Mods if isinstance(m, ModHidden)):
             hidden_bonus = 0.025 if is_convert else 0.1
 
-            if not _has_mod(mods, "FL"):
+            if not any(m for m in score.Mods if isinstance(m, ModFlashlight)):
                 if not is_classic:
                     hidden_bonus *= 0.2
 
-                if _has_mod(mods, "EZ") and is_classic:
+                if any(m for m in score.Mods if isinstance(m, ModEasy)) and is_classic:
                     hidden_bonus *= 0.5
 
-            difficulty_value *= 1 + hidden_bonus
+            difficulty_value *= 1.0 + hidden_bonus
 
-        if _has_mod(mods, "FL"):
-            difficulty_value *= max(
-                1.0,
-                1.050 - min(attributes.MonoStaminaFactor / 50, 1) * length_bonus,
-            )
+        if any(m for m in score.Mods if isinstance(m, ModFlashlight)):
+            difficulty_value *= max(1.0, 1.050 - min(attributes.MonoStaminaFactor / 50, 1.0) * length_bonus)
 
         # A beatmap leaning on single-colour runs punishes loose timing harder,
         # because there is no hand change to hide behind.
@@ -196,18 +209,18 @@ class TaikoPerformanceCalculator(PerformanceCalculator):
         return difficulty_value * DiffUtils.Pow(
             DiffUtils.Erf(
                 mono_acc_scaling_shift
-                / (DiffUtils.SQRT2 * self._estimated_unstable_rate)
+                / (DiffUtils.SQRT2 * estimated_ur)
             ),
             mono_acc_scaling_exponent,
         )
 
     def _compute_accuracy_value(
-        self, mods: list, attributes, is_convert: bool
+        self, score: ScoreInfo, attributes: TaikoDifficultyAttributes, is_convert: bool
     ) -> float:
         """Return what the player's timing is worth on its own.
 
         Args:
-            mods: The mods the score was set with.
+            score: The score was set with.
             attributes: The beatmap's difficulty.
             is_convert: Whether the beatmap was written for another ruleset.
         """
@@ -223,7 +236,7 @@ class TaikoPerformanceCalculator(PerformanceCalculator):
             / 600
         )
 
-        if _has_mod(mods, "HD") and not is_convert:
+        if any(m for m in score.Mods if isinstance(m, ModHidden)) and not is_convert:
             accuracy_value *= 1.075
 
         accuracy_value *= 1 + 0.3 * self._total_difficult_hits / (
@@ -233,7 +246,11 @@ class TaikoPerformanceCalculator(PerformanceCalculator):
         memory_length_bonus = min(
             1.15, DiffUtils.Pow(self._total_hits / 1500.0, 0.3)
         )
-        if _has_mod(mods, "FL") and _has_mod(mods, "HD") and not is_convert:
+        if (
+            any(m for m in score.Mods if isinstance(m, ModFlashlight))
+            and any(m for m in score.Mods if isinstance(m, ModHidden))
+            and not is_convert
+        ):
             accuracy_value *= max(1.0, 1.05 * memory_length_bonus)
 
         return accuracy_value
@@ -256,24 +273,3 @@ class TaikoPerformanceCalculator(PerformanceCalculator):
         )
 
         return self._great_hit_window / (DiffUtils.SQRT2 * DiffUtils.ErfInv(lower_bound))
-
-
-def _has_mod(mods: list, acronym: str) -> bool:
-    """Return whether a mod is among those the score was set with.
-
-    Args:
-        mods: The mods the score was set with.
-        acronym: The mod to look for.
-    """
-    return any(getattr(mod, "Acronym", None) == acronym for mod in mods)
-
-
-def _clock_rate_with_mods(mods: list) -> float:
-    """Return the rate the beatmap is played at.
-
-    Args:
-        mods: The mods the score was set with.
-    """
-    from parsecore.Rulesets.Difficulty.DifficultyCalculator import DifficultyCalculator
-
-    return DifficultyCalculator.GetClockRate(mods)

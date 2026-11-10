@@ -24,6 +24,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
 from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 
 # Slider ticks appear at a fraction of a normal object's preempt time.
@@ -33,20 +35,16 @@ ANIM_DURATION = 150.0
 class SliderTick(OsuHitObject):
     """A point along a slider the player must pass through."""
 
-    def __init__(self, start_time: float = 0.0, position=None) -> None:
-        """Create a slider tick.
+    def __init__(self) -> None:
+        """Create a slider tick."""
 
-        Args:
-            start_time: The tick's time in milliseconds.
-            position: The tick's position along the path.
-        """
-        super().__init__(start_time, position)
+        super().__init__()
         self.SpanIndex: int = 0
         self.SpanStartTime: float = 0.0
         # Kept so the tick can be placed again if the slider's path moves.
         self.PathProgress: float = 0.0
 
-    def ApplyDefaultsToSelf(self, control_point_info, difficulty) -> None:
+    def ApplyDefaultsToSelf(self, control_point_info: ControlPointInfo, difficulty: BeatmapDifficulty) -> None:
         """Give the tick a shortened preempt time.
 
         Args:

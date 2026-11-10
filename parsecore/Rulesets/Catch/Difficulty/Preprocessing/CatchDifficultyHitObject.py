@@ -24,9 +24,16 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Rulesets.Catch.Objects.PalpableCatchHitObject import (
+    PalpableCatchHitObject,
+)
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
+from parsecore.Rulesets.Objects.HitObject import HitObject
+from parsecore.Utils.Precision import Clamp
 from parsecore.Utils.Vector2 import f32
 
 # The plate's half-width, once every beatmap is scaled onto one measure.
@@ -44,11 +51,11 @@ class CatchDifficultyHitObject(DifficultyHitObject):
 
     def __init__(
         self,
-        hit_object,
-        last_object,
+        hit_object: HitObject,
+        last_object: HitObject,
         clock_rate: float,
         half_catcher_width: float,
-        objects: list,
+        objects: list[DifficultyHitObject],
         index: int,
     ) -> None:
         """Create a difficulty object and work out the movement it needs.
@@ -63,9 +70,12 @@ class CatchDifficultyHitObject(DifficultyHitObject):
         """
         super().__init__(hit_object, last_object, clock_rate, objects, index)
 
+        self.BaseObject = cast(PalpableCatchHitObject, self.BaseObject)
+        self.LastObject = cast(PalpableCatchHitObject, self.LastObject)
+
         scaling_factor = f32(NORMALIZED_HALF_CATCHER_WIDTH / half_catcher_width)
-        self.NormalizedPosition = f32(hit_object.EffectiveX * scaling_factor)
-        self.LastNormalizedPosition = f32(last_object.EffectiveX * scaling_factor)
+        self.NormalizedPosition = f32(self.BaseObject.EffectiveX * scaling_factor)
+        self.LastNormalizedPosition = f32(self.LastObject.EffectiveX * scaling_factor)
 
         self.StrainTime = max(MINIMUM_STRAIN_TIME, self.DeltaTime)
 
@@ -78,7 +88,7 @@ class CatchDifficultyHitObject(DifficultyHitObject):
 
     def _set_movement_state(self) -> None:
         """Work out how far the plate has to move to reach this object."""
-        previous = self.Previous(0)
+        previous = cast(CatchDifficultyHitObject, self.Previous(0))
         self.LastPlayerPosition = (
             self.LastNormalizedPosition if self.Index == 0 else previous.PlayerPosition
         )
@@ -86,10 +96,11 @@ class CatchDifficultyHitObject(DifficultyHitObject):
         # The plate only moves as far as it must: anywhere within its own edge
         # of the fruit will do.
         reach = NORMALIZED_HALF_CATCHER_WIDTH - ABSOLUTE_PLAYER_POSITIONING_ERROR
-        self.PlayerPosition = min(
-            max(self.LastPlayerPosition, f32(self.NormalizedPosition - reach)),
-            f32(self.NormalizedPosition + reach),
-        )
+        self.PlayerPosition = f32(Clamp(
+            self.LastPlayerPosition,
+            self.NormalizedPosition - reach,
+            self.NormalizedPosition + reach
+        ))
 
         self.DistanceMoved = f32(self.PlayerPosition - self.LastPlayerPosition)
         self.ExactDistanceMoved = f32(

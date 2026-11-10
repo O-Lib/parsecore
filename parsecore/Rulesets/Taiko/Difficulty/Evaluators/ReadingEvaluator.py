@@ -24,47 +24,29 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
-
-# The scroll speeds where reading starts and stops being the limiting factor.
-HIGH_VELOCITY_MIN = 480.0
-HIGH_VELOCITY_MAX = 640.0
-MID_VELOCITY_MIN = 360.0
-MID_VELOCITY_MAX = 480.0
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+    TaikoDifficultyHitObject,
+)
 
 
-def _centre(minimum: float, maximum: float) -> float:
-    """Return the middle of a velocity range.
-
-    Args:
-        minimum: The range's lower bound.
-        maximum: The range's upper bound.
-    """
-    return (maximum + minimum) / 2
-
-
-def _range(minimum: float, maximum: float) -> float:
-    """Return how wide a velocity range is.
-
-    Args:
-        minimum: The range's lower bound.
-        maximum: The range's upper bound.
-    """
-    return maximum - minimum
-
-
-def EvaluateDifficultyOf(note_object) -> float:
+def EvaluateDifficultyOf(note_object: TaikoDifficultyHitObject) -> float:
     """Return how hard a note is to read.
 
     Args:
         note_object: The difficulty object to rate.
     """
+    high_velocity = VelocityRange(480, 640)
+    mid_velocity = VelocityRange(360, 480)
+
     effective_bpm = max(1.0, note_object.EffectiveBPM)
 
     mid_velocity_difficulty = 0.5 * DiffUtils.Logistic(
         effective_bpm,
-        _centre(MID_VELOCITY_MIN, MID_VELOCITY_MAX),
-        1.0 / (_range(MID_VELOCITY_MIN, MID_VELOCITY_MAX) / 10),
+        mid_velocity.Center,
+        1.0 / (mid_velocity.Range / 10),
     )
 
     # How closely the notes are packed compared to what this scroll speed
@@ -75,9 +57,27 @@ def EvaluateDifficultyOf(note_object) -> float:
 
     high_velocity_difficulty = (1.0 - 0.33 * density_penalty) * DiffUtils.Logistic(
         effective_bpm,
-        _centre(HIGH_VELOCITY_MIN, HIGH_VELOCITY_MAX) + 8 * density_penalty,
+        high_velocity.Center + 8 * density_penalty,
         (1.0 + 0.5 * density_penalty)
-        / (_range(HIGH_VELOCITY_MIN, HIGH_VELOCITY_MAX) / 10),
+        / (high_velocity.Range / 10),
     )
 
     return mid_velocity_difficulty + high_velocity_difficulty
+
+
+@dataclass(frozen=True)
+class VelocityRange:
+    """Range of scroll velocities for reading difficulty evaluation."""
+    
+    Min: float
+    Max: float
+
+    @property
+    def Center(self) -> float:
+        """Return the midpoint of the velocity range."""
+        return (self.Max + self.Min) / 2
+
+    @property
+    def Range(self) -> float:
+        """Return the total span of the velocity range."""
+        return self.Max - self.Min

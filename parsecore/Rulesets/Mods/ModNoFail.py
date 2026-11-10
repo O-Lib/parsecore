@@ -36,3 +36,4 @@ class ModNoFail(Mod):
     Description = "You can't fail, no matter what."
     Type = ModType.DifficultyReduction
     ScoreMultiplier = 0.5
+    Ranked = True

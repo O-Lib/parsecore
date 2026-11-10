@@ -24,7 +24,11 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Beatmaps.Beatmap import Beatmap
 from parsecore.Beatmaps.BeatmapConverter import BeatmapConverter
+from parsecore.Beatmaps.Legacy.LegacyControlPointInfo import LegacyControlPointInfo
 from parsecore.Rulesets.Catch.Objects.Banana import BananaShower
 from parsecore.Rulesets.Catch.Objects.CatchHitObject import (
     DEFAULT_LEGACY_CONVERT_Y,
@@ -32,7 +36,12 @@ from parsecore.Rulesets.Catch.Objects.CatchHitObject import (
 from parsecore.Rulesets.Catch.Objects.Fruit import Fruit
 from parsecore.Rulesets.Catch.Objects.JuiceStream import JuiceStream
 from parsecore.Rulesets.Objects.HitObject import HitObject
+from parsecore.Rulesets.Objects.Types.IHasCombo import IHasCombo
 from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
+from parsecore.Rulesets.Objects.Types.IHasPathWithRepeats import IHasPathWithRepeats
+from parsecore.Rulesets.Objects.Types.IHasSliderVelocity import IHasSliderVelocity
+from parsecore.Rulesets.Objects.Types.IHasXPosition import IHasXPosition
+from parsecore.Rulesets.Objects.Types.IHasYPosition import IHasYPosition
 
 # Beatmaps before this format scaled tick spacing with the slider velocity.
 FIRST_UNSCALED_TICK_VERSION = 8
@@ -40,10 +49,18 @@ FIRST_UNSCALED_TICK_VERSION = 8
 
 class CatchBeatmapConverter(BeatmapConverter):
     """Turns decoded objects into catch fruit, streams and banana showers."""
+    
+    def __init__(self, beatmap: Beatmap) -> None:
+        """Create a catch beatmap converter.
+
+        Args:
+            beatmap: The beatmap to convert.
+        """
+        super().__init__(beatmap)
 
     def CanConvert(self) -> bool:
         """Return whether every object has a horizontal position."""
-        return all(hasattr(h, "X") for h in self.Beatmap.HitObjects)
+        return all(isinstance(h, IHasXPosition) for h in self.Beatmap.HitObjects)
 
     def CreateBeatmap(self):
         """Return an empty catch beatmap."""
@@ -51,7 +68,7 @@ class CatchBeatmapConverter(BeatmapConverter):
 
         return CatchBeatmap()
 
-    def ConvertHitObject(self, original: HitObject, beatmap) -> list[HitObject]:
+    def ConvertHitObject(self, original: HitObject, beatmap: Beatmap) -> list[HitObject]:
         """Convert one decoded object into its catch counterpart.
 
         Args:
@@ -61,44 +78,57 @@ class CatchBeatmapConverter(BeatmapConverter):
         Returns:
             The catch object it becomes.
         """
-        x = getattr(original, "X", 0.0)
-        y = getattr(original, "Y", DEFAULT_LEGACY_CONVERT_Y)
-        new_combo = getattr(original, "NewCombo", False)
-        combo_offset = getattr(original, "ComboOffset", 0)
+        x_position_data = original if isinstance(original, IHasXPosition) else None
+        y_position_data = original if isinstance(original, IHasYPosition) else None
+        combo_data = original if isinstance(original, IHasCombo) else None
+        slider_velocity_data = original if isinstance(original, IHasSliderVelocity) else None
 
-        if hasattr(original, "Path"):
-            stream = JuiceStream(original.StartTime, x)
+        new_combo = combo_data.NewCombo if combo_data is not None else False
+        combo_offset = combo_data.ComboOffset if combo_data is not None else 0
+        x = x_position_data.X if x_position_data is not None else 0.0
+        y = y_position_data.Y if y_position_data is not None else DEFAULT_LEGACY_CONVERT_Y
+        slider_velocity_multiplier = (
+            slider_velocity_data.SliderVelocityMultiplier if slider_velocity_data is not None else 1.0
+        )
+        if isinstance(original, IHasPathWithRepeats):
+            curve_data = original
+            stream = JuiceStream()
+            stream.StartTime = original.StartTime
             stream.Samples = original.Samples
-            stream.Path = original.Path
-            stream.NodeSamples = getattr(original, "NodeSamples", []) or []
-            stream.RepeatCount = original.RepeatCount
+            stream.Path = curve_data.Path
+            stream.NodeSamples = curve_data.NodeSamples
+            stream.RepeatCount = curve_data.RepeatCount
+            stream.X = x
             stream.NewCombo = new_combo
             stream.ComboOffset = combo_offset
             stream.LegacyConvertedY = y
             stream.TickDistanceMultiplier = self._tick_distance_multiplier(
                 original, beatmap
             )
-            stream.SliderVelocityMultiplier = getattr(
-                original, "SliderVelocityMultiplier", 1.0
-            )
+            stream.SliderVelocityMultiplier = slider_velocity_multiplier
             return [stream]
 
         if isinstance(original, IHasDuration):
-            shower = BananaShower(original.StartTime, original.Duration)
+            end_time = original
+            shower = BananaShower()
+            shower.StartTime = original.StartTime
             shower.Samples = original.Samples
+            shower.Duration = end_time.Duration
             shower.NewCombo = new_combo
             shower.ComboOffset = combo_offset
             return [shower]
 
-        fruit = Fruit(original.StartTime, x)
+        fruit = Fruit()
+        fruit.StartTime = original.StartTime
         fruit.Samples = original.Samples
         fruit.NewCombo = new_combo
         fruit.ComboOffset = combo_offset
+        fruit.X = x
         fruit.LegacyConvertedY = y
         return [fruit]
 
     @staticmethod
-    def _tick_distance_multiplier(original, beatmap) -> float:
+    def _tick_distance_multiplier(original: HitObject, beatmap: Beatmap) -> float:
         """Return the tick spacing correction for older beatmap formats.
 
         Args:
@@ -111,5 +141,9 @@ class CatchBeatmapConverter(BeatmapConverter):
         if beatmap.BeatmapInfo.BeatmapVersion >= FIRST_UNSCALED_TICK_VERSION:
             return 1.0
 
-        velocity = getattr(original, "SliderVelocityMultiplier", 1.0)
-        return 1.0 / velocity if velocity else 1.0
+        if isinstance(beatmap.ControlPointInfo, LegacyControlPointInfo):
+            legacy_cp = beatmap.ControlPointInfo
+            velocity = legacy_cp.DifficultyPointAt(original.StartTime).SliderVelocity
+            return 1.0 / velocity if velocity else 1.0
+
+        return 1.0

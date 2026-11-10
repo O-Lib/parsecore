@@ -24,7 +24,12 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Beatmaps.BeatmapConverter import BeatmapConverter
 from parsecore.Beatmaps.BeatmapProcessor import BeatmapProcessor
+from parsecore.Rulesets.Mods.IApplicableAfterBeatmapConversion import (
+    IApplicableAfterBeatmapConversion,
+)
 from parsecore.Rulesets.Mods.IApplicableToBeatmap import IApplicableToBeatmap
 from parsecore.Rulesets.Mods.IApplicableToBeatmapConverter import (
     IApplicableToBeatmapConverter,
@@ -34,12 +39,13 @@ from parsecore.Rulesets.Mods.IApplicableToBeatmapProcessor import (
 )
 from parsecore.Rulesets.Mods.IApplicableToDifficulty import IApplicableToDifficulty
 from parsecore.Rulesets.Mods.IApplicableToHitObject import IApplicableToHitObject
+from parsecore.Rulesets.Mods.Mod import Mod
 
 
 class WorkingBeatmap:
     """A decoded beatmap, ready to be converted for a ruleset."""
 
-    def __init__(self, beatmap) -> None:
+    def __init__(self, beatmap: Beatmap) -> None:
         """Wrap a decoded beatmap.
 
         Args:
@@ -49,9 +55,9 @@ class WorkingBeatmap:
 
     def GetPlayableBeatmap(
         self,
-        converter_type: type,
-        processor_type: type | None = None,
-        mods: list | None = None,
+        converter_type: type[BeatmapConverter],
+        processor_type: type[BeatmapProcessor] | None = None,
+        mods: list[Mod] | None = None,
     ):
         """Return the beatmap as the given ruleset plays it.
 
@@ -75,19 +81,15 @@ class WorkingBeatmap:
 
         converted = converter.Convert()
 
-        difficulty_mods = [
-            mod for mod in mods if isinstance(mod, IApplicableToDifficulty)
-        ]
-        if difficulty_mods:
-            # The difficulty is copied first, so a mod never writes back into
-            # the beatmap this was built from.
-            converted.Difficulty = converted.Difficulty.Clone()
-            for mod in difficulty_mods:
+        for mod in mods:
+            if isinstance(mod, IApplicableAfterBeatmapConversion):
+                mod.ApplyToBeatmap(converted)
+
+        for mod in mods:
+            if isinstance(mod, IApplicableToDifficulty):
                 mod.ApplyToDifficulty(converted.Difficulty)
 
-        processor: BeatmapProcessor | None = (
-            processor_type(converted) if processor_type else None
-        )
+        processor: BeatmapProcessor | None = processor_type(converted) if processor_type else None
 
         if processor is not None:
             for mod in mods:

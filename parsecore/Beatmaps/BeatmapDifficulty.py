@@ -24,9 +24,13 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import copy
+from dataclasses import dataclass, field
+
+from parsecore.Beatmaps.IBeatmapDifficultyInfo import IBeatmapDifficultyInfo
 from parsecore.Utils.Vector2 import f32
 
-DEFAULT_DIFFICULTY = 5.0
+DEFAULT_DIFFICULTY = f32(5.0)
 
 # The four settings osu! declares as ``float``.
 _SINGLE_PRECISION_SETTINGS = frozenset(
@@ -34,43 +38,15 @@ _SINGLE_PRECISION_SETTINGS = frozenset(
 )
 
 
-class BeatmapDifficulty:
+@dataclass(slots=True)
+class BeatmapDifficulty(IBeatmapDifficultyInfo):
     """The HP, CS, OD, AR and slider settings of a beatmap."""
-
-    __slots__ = (
-        "DrainRate",
-        "CircleSize",
-        "OverallDifficulty",
-        "ApproachRate",
-        "SliderMultiplier",
-        "SliderTickRate",
-    )
-
-    def __init__(
-        self,
-        DrainRate: float = DEFAULT_DIFFICULTY,
-        CircleSize: float = DEFAULT_DIFFICULTY,
-        OverallDifficulty: float = DEFAULT_DIFFICULTY,
-        ApproachRate: float = DEFAULT_DIFFICULTY,
-        SliderMultiplier: float = 1.4,
-        SliderTickRate: float = 1.0,
-    ) -> None:
-        """Create a set of difficulty settings.
-
-        Args:
-            DrainRate: The HP drain rate.
-            CircleSize: The circle size.
-            OverallDifficulty: The overall difficulty.
-            ApproachRate: The approach rate.
-            SliderMultiplier: The slider velocity multiplier.
-            SliderTickRate: How many ticks a slider places per beat.
-        """
-        self.DrainRate = DrainRate
-        self.CircleSize = CircleSize
-        self.OverallDifficulty = OverallDifficulty
-        self.ApproachRate = ApproachRate
-        self.SliderMultiplier = SliderMultiplier
-        self.SliderTickRate = SliderTickRate
+    DrainRate: float = field(default=DEFAULT_DIFFICULTY)
+    CircleSize: float = field(default=DEFAULT_DIFFICULTY)
+    OverallDifficulty: float = field(default=DEFAULT_DIFFICULTY)
+    ApproachRate: float = field(default=DEFAULT_DIFFICULTY)
+    SliderMultiplier: float = field(default=1.4)
+    SliderTickRate: float = field(default=1.0)
 
     def __setattr__(self, name: str, value: float) -> None:
         """Store a setting, narrowing the four single-precision ones.
@@ -83,43 +59,9 @@ class BeatmapDifficulty:
             value = f32(value)
         object.__setattr__(self, name, value)
 
-    def __repr__(self) -> str:
-        """Return an unambiguous representation."""
-        return (
-            f"BeatmapDifficulty(DrainRate={self.DrainRate!r}, "
-            f"CircleSize={self.CircleSize!r}, "
-            f"OverallDifficulty={self.OverallDifficulty!r}, "
-            f"ApproachRate={self.ApproachRate!r}, "
-            f"SliderMultiplier={self.SliderMultiplier!r}, "
-            f"SliderTickRate={self.SliderTickRate!r})"
-        )
-
-    def __eq__(self, other: object) -> bool:
-        """Return whether every setting matches."""
-        if not isinstance(other, BeatmapDifficulty):
-            return NotImplemented
-        return all(
-            getattr(self, name) == getattr(other, name) for name in self.__slots__
-        )
-
-    def CopyFrom(self, other: BeatmapDifficulty) -> None:
-        """Copy every value from another difficulty.
-
-        Args:
-            other: The difficulty to copy.
-        """
-        self.DrainRate = other.DrainRate
-        self.CircleSize = other.CircleSize
-        self.OverallDifficulty = other.OverallDifficulty
-        self.ApproachRate = other.ApproachRate
-        self.SliderMultiplier = other.SliderMultiplier
-        self.SliderTickRate = other.SliderTickRate
-
     def Clone(self) -> BeatmapDifficulty:
         """Return an independent copy of this difficulty."""
-        copy = BeatmapDifficulty()
-        copy.CopyFrom(self)
-        return copy
+        return copy.deepcopy(self)
 
     @staticmethod
     def InverseDifficultyRange(

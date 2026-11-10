@@ -21,29 +21,32 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+from typing import cast
 
 import pytest
 
 from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
 from parsecore.Beatmaps.Formats.LegacyBeatmapDecoder import LegacyBeatmapDecoder
 from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
-from parsecore.Rulesets.Mods.ModDoubleTime import ModDoubleTime
 from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
     CalculateDifficultyPeppyStars,
 )
 from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapConverter import OsuBeatmapConverter
 from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapProcessor import OsuBeatmapProcessor
+from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyAttributes import (
+    OsuDifficultyAttributes,
+)
 from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyCalculator import (
     OsuDifficultyCalculator,
 )
 from parsecore.Rulesets.Osu.Difficulty.OsuLegacyScoreSimulator import (
-    GetLegacyScoreMultiplier,
     OsuLegacyScoreSimulator,
 )
 from parsecore.Rulesets.Osu.Difficulty.OsuPerformanceCalculator import (
     OsuPerformanceCalculator,
 )
 from parsecore.Rulesets.Osu.Mods.OsuModClassic import OsuModClassic
+from parsecore.Rulesets.Osu.Mods.OsuModDoubleTime import OsuModDoubleTime
 from parsecore.Rulesets.Osu.Mods.OsuModEasy import OsuModEasy
 from parsecore.Rulesets.Osu.Mods.OsuModHardRock import OsuModHardRock
 from parsecore.Rulesets.Osu.Mods.OsuModHidden import OsuModHidden
@@ -76,10 +79,8 @@ def _attributes(path, mods=None):
     """
     mods = mods or []
     decoded = LegacyBeatmapDecoder.FromPath(str(path))
-    playable = WorkingBeatmap(decoded).GetPlayableBeatmap(
-        OsuBeatmapConverter, OsuBeatmapProcessor, mods
-    )
-    return decoded, OsuDifficultyCalculator(playable, decoded).Calculate(mods)
+    playable = WorkingBeatmap(decoded)
+    return decoded, OsuDifficultyCalculator(playable).Calculate(mods)
 
 
 def test_the_score_figure_is_worked_out_at_decimal_precision():
@@ -117,11 +118,12 @@ def test_a_beatmap_matches_osu(
     """A real beatmap carries exactly the legacy score figures osu! reports."""
     path = next(f for f in beatmap_files if f.name == name)
 
-    _, attributes = _attributes(path)
+    _, attributes = (_attributes(path))
+    osu_attributes = cast(OsuDifficultyAttributes, attributes)
 
-    assert attributes.LegacyScoreBaseMultiplier == peppy_stars
-    assert attributes.NestedScorePerObject == nested_score
-    assert attributes.MaximumLegacyComboScore == combo_score
+    assert osu_attributes.LegacyScoreBaseMultiplier == peppy_stars
+    assert osu_attributes.NestedScorePerObject == nested_score
+    assert osu_attributes.MaximumLegacyComboScore == combo_score
 
 
 def test_the_simulated_combo_never_exceeds_the_beatmap_s_own(beatmap_files):
@@ -130,13 +132,13 @@ def test_the_simulated_combo_never_exceeds_the_beatmap_s_own(beatmap_files):
         f for f in beatmap_files if f.name.startswith("Kenji Ninuma - DISCOPRINCE")
     )
     decoded = LegacyBeatmapDecoder.FromPath(str(path))
-    playable = WorkingBeatmap(decoded).GetPlayableBeatmap(
-        OsuBeatmapConverter, OsuBeatmapProcessor, []
-    )
+    workingBeatmap = WorkingBeatmap(decoded)
 
-    simulated = OsuLegacyScoreSimulator().Simulate(decoded, playable)
+    playable_beatmap = workingBeatmap.GetPlayableBeatmap(OsuBeatmapConverter, OsuBeatmapProcessor, [])
 
-    assert simulated.MaxCombo == playable.GetMaxCombo()
+    simulated = OsuLegacyScoreSimulator().Simulate(workingBeatmap, playable_beatmap)
+
+    assert simulated.MaxCombo == playable_beatmap.GetMaxCombo()
     assert simulated.AccuracyScore > 0
 
 
@@ -148,21 +150,21 @@ def test_the_simulated_combo_never_exceeds_the_beatmap_s_own(beatmap_files):
         ([OsuModEasy()], 0.5),
         ([OsuModHidden()], 1.06),
         ([OsuModHardRock()], 1.06),
-        ([ModDoubleTime()], 1.12),
+        ([OsuModDoubleTime()], 1.12),
         ([OsuModHidden(), OsuModHardRock()], 1.06 * 1.06),
     ],
     ids=["NM", "NF", "EZ", "HD", "HR", "DT", "HDHR"],
 )
 def test_the_mods_scale_an_old_score(mods, expected):
     """osu!stable paid more for some mods and less for others."""
-    assert GetLegacyScoreMultiplier(mods) == pytest.approx(expected)
+    assert OsuLegacyScoreSimulator.GetLegacyScoreMultiplier(mods) == pytest.approx(expected)
 
 
 def test_relax_scored_nothing_at_all():
     """osu!stable refused to score a relax play."""
     from parsecore.Rulesets.Osu.Mods.OsuModRelax import OsuModRelax
 
-    assert GetLegacyScoreMultiplier([OsuModRelax()]) == 0.0
+    assert OsuLegacyScoreSimulator.GetLegacyScoreMultiplier([OsuModRelax()]) == 0.0
 
 
 LEGACY_PLAYS = [
@@ -191,7 +193,7 @@ def test_an_old_score_pays_what_osu_pays(
 
     score = ScoreInfo(
         Mods=mods,
-        BeatmapDifficulty=decoded.Difficulty,
+        BeatmapInfo=decoded.BeatmapInfo,
         MaxCombo=combo,
         Accuracy=accuracy,
         LegacyTotalScore=legacy_total,
@@ -217,7 +219,7 @@ def test_a_perfect_score_can_hide_no_combo_breaks(beatmap_files):
     def pp_for(legacy_total, combo):
         score = ScoreInfo(
             Mods=mods,
-            BeatmapDifficulty=decoded.Difficulty,
+            BeatmapInfo=decoded.BeatmapInfo,
             MaxCombo=combo,
             Accuracy=1.0,
             LegacyTotalScore=legacy_total,
@@ -243,7 +245,7 @@ def test_a_score_that_dropped_judgements_is_read_from_its_total(beatmap_files):
     def pp_for(combo, misses, great, legacy_total, accuracy):
         score = ScoreInfo(
             Mods=mods,
-            BeatmapDifficulty=decoded.Difficulty,
+            BeatmapInfo=decoded.BeatmapInfo,
             MaxCombo=combo,
             Accuracy=accuracy,
             LegacyTotalScore=legacy_total,

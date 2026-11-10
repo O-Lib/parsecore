@@ -24,8 +24,17 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Osu.Difficulty.Preprocessing.OsuDifficultyHitObject import (
+    OsuDifficultyHitObject,
+)
 from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
+from parsecore.Utils.Precision import Clamp
 
 # Streams faster than 200 BPM (1/4) start earning a bonus.
 MIN_SPEED_BONUS = 200.0
@@ -35,9 +44,10 @@ SPEED_BALANCING_FACTOR = 40.0
 # the effect of capping delta time to the hit window.
 HIT_WINDOW_CAP_FACTOR = 0.93
 HIT_WINDOW_CAP_MIN = 0.92
+HIT_WINDOW_CAP_MAX = 1.0
 
 
-def EvaluateDifficultyOf(current) -> float:
+def EvaluateDifficultyOf(current: DifficultyHitObject) -> float:
     """Return how hard ``current`` is to tap.
 
     Args:
@@ -49,24 +59,21 @@ def EvaluateDifficultyOf(current) -> float:
     if isinstance(current.BaseObject, Spinner):
         return 0.0
 
-    osu_curr_obj = current
+    osu_curr_obj = cast(OsuDifficultyHitObject, current)
 
     strain_time = osu_curr_obj.AdjustedDeltaTime
 
     double_tap_feasibility = 1.0 - osu_curr_obj.CalculateDoubleTapFeasibility(
-        osu_curr_obj.Next()
+        cast(OsuDifficultyHitObject | None, osu_curr_obj.Next())
     )
 
     # Delta time is capped at the great hit window: past that point, tapping
     # faster no longer helps, because the window itself is the limit.
-    if osu_curr_obj.HitWindowGreat:
-        strain_time /= min(
-            max(
-                (strain_time / osu_curr_obj.HitWindowGreat) / HIT_WINDOW_CAP_FACTOR,
-                HIT_WINDOW_CAP_MIN,
-            ),
-            1.0,
-        )
+    strain_time /= Clamp(
+        (strain_time / osu_curr_obj.HitWindowGreat) / HIT_WINDOW_CAP_FACTOR,
+        HIT_WINDOW_CAP_MIN,
+        HIT_WINDOW_CAP_MAX
+    )
 
     speed_bonus = 0.0
     if DiffUtils.MillisecondsToBPM(strain_time) > MIN_SPEED_BONUS:
@@ -87,5 +94,8 @@ def _high_bpm_bonus(ms: float) -> float:
 
     Args:
         ms: The time available for the tap, in milliseconds.
+
+    Returns:
+        The high BPM bonus multiplier.
     """
     return 1 / (1 - DiffUtils.Pow(0.3, ms / 1000))

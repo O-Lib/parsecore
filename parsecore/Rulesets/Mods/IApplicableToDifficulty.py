@@ -26,12 +26,14 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+
 
 @runtime_checkable
 class IApplicableToDifficulty(Protocol):
     """A mod that adjusts CS, AR, OD or HP."""
 
-    def ApplyToDifficulty(self, difficulty) -> None:
+    def ApplyToDifficulty(self, difficulty: BeatmapDifficulty) -> None:
         """Adjust the beatmap's difficulty in place.
 
         Args:

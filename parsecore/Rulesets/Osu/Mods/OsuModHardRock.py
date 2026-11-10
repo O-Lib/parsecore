@@ -24,7 +24,14 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Rulesets.Mods.IApplicableToHitObject import IApplicableToHitObject
 from parsecore.Rulesets.Mods.ModHardRock import ADJUST_RATIO, ModHardRock
+from parsecore.Rulesets.Mods.ModMirror import ModMirror
+from parsecore.Rulesets.Objects.HitObject import HitObject
+from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 from parsecore.Rulesets.Osu.Utils.OsuHitObjectGenerationUtils import (
     ReflectVerticallyAlongPlayfield,
 )
@@ -35,12 +42,15 @@ from parsecore.Utils.Vector2 import f32
 CIRCLE_SIZE_RATIO = f32(1.3)
 
 
-class OsuModHardRock(ModHardRock):
+class OsuModHardRock(ModHardRock, IApplicableToHitObject):
     """Everything just got a bit harder, and the playfield is upside down."""
 
-    IncompatibleMods = ModHardRock.IncompatibleMods + ("MR",)
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Hard Rock."""
+        return [*super().IncompatibleMods, ModMirror]
 
-    def ApplyToDifficulty(self, difficulty) -> None:
+    def ApplyToDifficulty(self, difficulty: BeatmapDifficulty) -> None:
         """Raise every difficulty setting, capped at ten.
 
         Args:
@@ -48,16 +58,15 @@ class OsuModHardRock(ModHardRock):
         """
         super().ApplyToDifficulty(difficulty)
 
-        difficulty.OverallDifficulty = min(
-            difficulty.OverallDifficulty * ADJUST_RATIO, 10.0
-        )
+        difficulty.OverallDifficulty = min(difficulty.OverallDifficulty * ADJUST_RATIO, 10.0)
         difficulty.CircleSize = min(difficulty.CircleSize * CIRCLE_SIZE_RATIO, 10.0)
         difficulty.ApproachRate = min(difficulty.ApproachRate * ADJUST_RATIO, 10.0)
 
-    def ApplyToHitObject(self, hit_object) -> None:
+    def ApplyToHitObject(self, hit_object: HitObject) -> None:
         """Mirror an object across the middle of the playfield.
 
         Args:
             hit_object: The object to reflect.
         """
-        ReflectVerticallyAlongPlayfield(hit_object)
+        osu_object = cast(OsuHitObject, hit_object)
+        ReflectVerticallyAlongPlayfield(osu_object)

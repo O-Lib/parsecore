@@ -24,8 +24,23 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
+from parsecore.Rulesets.Mania.Beatmaps.ManiaBeatmapConverter import (
+    GetColumnCount,
+    ManiaBeatmapConverter,
+)
+from parsecore.Rulesets.Mania.Mods.ManiaModDaycore import ManiaModDaycore
+from parsecore.Rulesets.Mania.Mods.ManiaModEasy import ManiaModEasy
+from parsecore.Rulesets.Mania.Mods.ManiaModHalfTime import ManiaModHalfTime
+from parsecore.Rulesets.Mania.Mods.ManiaModNoFail import ManiaModNoFail
+from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Mods.ModScoreV2 import ModScoreV2
 from parsecore.Rulesets.Scoring.Legacy.ILegacyScoreSimulator import (
     ILegacyScoreSimulator,
+)
+from parsecore.Rulesets.Scoring.Legacy.LegacyBeatmapConversionDifficultyInfo import (
+    LegacyBeatmapConversionDifficultyInfo,
 )
 from parsecore.Rulesets.Scoring.Legacy.LegacyScoreAttributes import (
     LegacyScoreAttributes,
@@ -49,11 +64,11 @@ MOD_MULTIPLIERS = {
 class ManiaLegacyScoreSimulator(ILegacyScoreSimulator):
     """Simulates a perfect mania play under osu!stable's first scoring system."""
 
-    def Simulate(self, beatmap, playable_beatmap) -> LegacyScoreAttributes:
+    def Simulate(self, workingBeatmap: WorkingBeatmap, playable_beatmap: Beatmap) -> LegacyScoreAttributes:
         """Return the highest osu!stable score a beatmap allows.
 
         Args:
-            beatmap: The beatmap as it was decoded.
+            workingBeatmap: The beatmap as it was decoded.
             playable_beatmap: The same beatmap as mania plays it.
         """
         return LegacyScoreAttributes(
@@ -62,31 +77,22 @@ class ManiaLegacyScoreSimulator(ILegacyScoreSimulator):
             MaxCombo=0,
         )
 
-    def GetLegacyScoreMultiplier(self, mods: list, difficulty) -> float:
+    @staticmethod
+    def _GetLegacyScoreMultiplier(mods: list[Mod], difficulty: LegacyBeatmapConversionDifficultyInfo) -> float:
         """Return what the mods multiply an osu!stable score by.
 
         Args:
             mods: The mods the score was set with.
-            difficulty: The settings the beatmap was converted against, which
-                decide how many columns it would otherwise have had.
         """
-        acronyms = [getattr(mod, "Acronym", None) for mod in mods]
-        score_v2 = "SV2" in acronyms
-
+        score_v2 = any(m for m in mods if isinstance(m, ModScoreV2))
         multiplier = 1.0
 
-        for acronym in acronyms:
-            pair = MOD_MULTIPLIERS.get(acronym)
-            if pair is not None:
-                multiplier *= pair[1] if score_v2 else pair[0]
+        for mod in mods:
+            if isinstance(mod, ManiaModNoFail):
+                multiplier *= 1.0 if score_v2 else 0.5
 
-        # A beatmap written for mania has no key mods to account for.
-        if difficulty.SourceRulesetID == MANIA_RULESET_ID:
-            return multiplier
-
-        from parsecore.Rulesets.Mania.Beatmaps.ManiaBeatmapConverter import (
-            GetColumnCount,
-        )
+            elif isinstance(mod, (ManiaModHalfTime, ManiaModDaycore, ManiaModEasy)):
+                multiplier *= 0.5
 
         original_columns = GetColumnCount(difficulty)
         actual_columns = GetColumnCount(difficulty, mods)

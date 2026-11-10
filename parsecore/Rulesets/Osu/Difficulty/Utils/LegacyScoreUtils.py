@@ -24,6 +24,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
 from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
     CalculateDifficultyPeppyStars,
 )
@@ -46,7 +47,7 @@ MAXIMUM_ROTATIONS_PER_SECOND = 477.0 / 60
 MINIMUM_ROTATIONS_PER_SECOND = 3
 
 
-def CalculateNestedScorePerObject(beatmap, object_count: int) -> float:
+def CalculateNestedScorePerObject(beatmap: Beatmap, object_count: int) -> float:
     """Return the average score an object carries through its ticks.
 
     Args:
@@ -74,7 +75,7 @@ def CalculateNestedScorePerObject(beatmap, object_count: int) -> float:
     return (slider_score + spinner_score) / object_count
 
 
-def _calculate_spinner_score(spinner) -> float:
+def _calculate_spinner_score(spinner: Spinner) -> float:
     """Return what a spinner is worth on an average play, not a perfect one.
 
     Args:
@@ -105,7 +106,7 @@ def _calculate_spinner_score(spinner) -> float:
     return float(score)
 
 
-def CalculateDifficultyPeppyStarsFor(beatmap) -> int:
+def CalculateDifficultyPeppyStarsFor(beatmap: Beatmap) -> int:
     """Return the multiplier osu!stable scaled a beatmap's score by.
 
     Args:

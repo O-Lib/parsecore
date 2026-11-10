@@ -24,9 +24,15 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
 from parsecore.Rulesets.Osu.Difficulty.Preprocessing.OsuDifficultyHitObject import (
     NORMALISED_DIAMETER,
+    OsuDifficultyHitObject,
 )
 from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
 
@@ -34,7 +40,7 @@ from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
 DISTANCE_CAP = NORMALISED_DIAMETER * 1.2
 
 
-def EvaluateDifficultyOf(current) -> float:
+def EvaluateDifficultyOf(current: DifficultyHitObject) -> float:
     """Return how hard the movement onto ``current`` is to perform quickly.
 
     Args:
@@ -46,8 +52,8 @@ def EvaluateDifficultyOf(current) -> float:
     if isinstance(current.BaseObject, Spinner):
         return 0.0
 
-    osu_curr_obj = current
-    osu_prev_obj = current.Previous() if current.Index > 0 else None
+    osu_curr_obj = cast(OsuDifficultyHitObject, current)
+    osu_prev_obj = cast(OsuDifficultyHitObject, current.Previous()) if current.Index > 0 else None
 
     travel_distance = osu_prev_obj.LazyTravelDistance if osu_prev_obj else 0.0
     distance = travel_distance + osu_curr_obj.LazyJumpDistance
@@ -66,5 +72,8 @@ def _high_bpm_bonus(ms: float) -> float:
 
     Args:
         ms: The time available for the movement, in milliseconds.
+
+    Returns:
+        The high BPM bonus multiplier.
     """
     return 1 / (1 - DiffUtils.Pow(0.2, ms / 1000))

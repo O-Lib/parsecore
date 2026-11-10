@@ -25,13 +25,18 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
 from parsecore.Rulesets.Difficulty.Skills.HarmonicSkill import HarmonicSkill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Osu.Difficulty.Evaluators import ReadingEvaluator
+from parsecore.Rulesets.Osu.Difficulty.Preprocessing.OsuDifficultyHitObject import (
+    OsuDifficultyHitObject,
+)
 from parsecore.Rulesets.Osu.Mods.OsuModAutopilot import OsuModAutopilot
 from parsecore.Rulesets.Osu.Mods.OsuModHidden import OsuModHidden
 from parsecore.Rulesets.Osu.Mods.OsuModMagnetised import OsuModMagnetised
@@ -49,18 +54,14 @@ REDUCED_DIFFICULTY_BASE_LINE = 0.0
 class Reading(HarmonicSkill):
     """Measures how hard a beatmap is to read."""
 
-    def __init__(self, mods: list | None = None) -> None:
+    def __init__(self, mods: list[Mod]) -> None:
         """Create the reading skill.
 
         Args:
             mods: The mods the score was set with.
         """
         super().__init__(mods)
-        self._has_hidden_mod = any(
-            isinstance(m, OsuModHidden)
-            and not getattr(m, "OnlyFadeApproachCircles", False)
-            for m in self.Mods
-        )
+        self._has_hidden_mod = any(not m.OnlyFadeApproachCircles for m in mods if isinstance(m, OsuModHidden))
         self._current_strain = 0.0
         self._reduced_note_count = 0.0
         self._reduced_duration: float | None = None
@@ -120,7 +121,11 @@ class Reading(HarmonicSkill):
             difficulty *= 0.1
 
         difficulty *= (
-            0.825 + DiffUtils.Pow(max(0.0, current.OverallDifficulty), 2.2) / 1125.0
+            0.825 + DiffUtils.Pow(
+            max(0.0, cast(OsuDifficultyHitObject, current).OverallDifficulty),
+            2.2
+        )
+            / 1125.0
         )
 
         return difficulty

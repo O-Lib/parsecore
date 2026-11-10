@@ -24,6 +24,14 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
+from parsecore.Rulesets.Mania.Difficulty.Preprocessing.ManiaDifficultyHitObject import (
+    ManiaDifficultyHitObject,
+)
 from parsecore.Utils.Precision import DefinitelyBigger
 
 # What one note is worth before any bonus.
@@ -33,12 +41,13 @@ BASE_STRAIN = 2.0
 HOLD_FACTOR = 1.25
 
 
-def EvaluateDifficultyOf(current) -> float:
+def EvaluateDifficultyOf(current: DifficultyHitObject) -> float:
     """Return how hard one note is for the finger playing it.
 
     Args:
         current: The difficulty object to rate.
     """
+    current = cast(ManiaDifficultyHitObject, current)
     start_time = current.StartTime
     end_time = current.EndTime
 

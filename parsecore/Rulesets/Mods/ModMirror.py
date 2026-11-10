@@ -33,6 +33,4 @@ class ModMirror(Mod):
 
     Name = "Mirror"
     Acronym = "MR"
-    Description = "Flip objects on the chosen axes."
     Type = ModType.Conversion
-    ScoreMultiplier = 1.0

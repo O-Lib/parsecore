@@ -47,18 +47,21 @@ from parsecore.Rulesets.Taiko.Objects.SwellTick import SwellTick
 
 def test_the_drum_side_comes_from_the_samples():
     """A clap or whistle makes a note a rim note; anything else is centre."""
-    centre = Hit(1000.0)
+    centre = Hit()
+    centre.StartTime = 1000.0
     centre.Samples = [HitSampleInfo(HIT_NORMAL)]
     assert centre.Type == HitType.Centre
 
-    rim = Hit(1000.0)
+    rim = Hit()
+    rim.StartTime = 1000.0
     rim.Samples = [HitSampleInfo(HIT_NORMAL), HitSampleInfo(HIT_CLAP)]
     assert rim.Type == HitType.Rim
 
 
 def test_a_finish_sample_makes_a_note_strong():
     """Strength is read off the samples, and a strong note nests a second hit."""
-    note = Hit(1000.0)
+    note = Hit()
+    note.StartTime = 1000.0
     note.Samples = [HitSampleInfo(HIT_NORMAL), HitSampleInfo(HIT_FINISH)]
     assert note.IsStrong
 
@@ -69,7 +72,8 @@ def test_a_finish_sample_makes_a_note_strong():
 
 def test_marking_a_note_strong_adds_the_sample():
     """Writing the flag writes a finish sample, so the two never disagree."""
-    note = Hit(1000.0)
+    note = Hit()
+    note.StartTime = 1000.0
     note.Samples = [HitSampleInfo(HIT_NORMAL)]
     assert not note.IsStrong
 
@@ -88,8 +92,9 @@ def test_a_note_with_its_own_sample_file_cannot_be_made_strong():
     beatmaps rely on this: it is why simultaneous mania notes on such a map do
     not turn into strong taiko notes.
     """
-    note = Hit(1000.0)
-    note.Samples = [FileHitSampleInfo(Filename="normal-hitnormal.wav")]
+    note = Hit()
+    note.StartTime = 1000.0
+    note.Samples = [FileHitSampleInfo("normal-hitnormal.wav", 100)]
     assert not note.IsStrong
 
     note.IsStrong = True
@@ -103,7 +108,9 @@ def test_a_drum_roll_places_a_tick_per_beat_subdivision():
     control_points = ControlPointInfo()
     control_points.Add(0.0, TimingControlPoint(BeatLength=500.0))
 
-    roll = DrumRoll(0.0, 1000.0)
+    roll = DrumRoll()
+    roll.StartTime = 0.0
+    roll.Duration = 1000.0
     roll.Samples = [HitSampleInfo(HIT_NORMAL)]
     roll.ApplyDefaults(control_points, BeatmapDifficulty(SliderTickRate=1))
 
@@ -121,14 +128,18 @@ def test_only_a_tick_rate_of_three_is_honoured():
     control_points.Add(0.0, TimingControlPoint(BeatLength=500.0))
 
     for rate, expected in [(1, 4), (2, 4), (3, 3), (4, 4)]:
-        roll = DrumRoll(0.0, 500.0)
+        roll = DrumRoll()
+        roll.StartTime = 0.0
+        roll.Duration = 500.0
         roll.ApplyDefaults(control_points, BeatmapDifficulty(SliderTickRate=rate))
         assert roll.TickRate == expected, f"tick rate {rate}"
 
 
 def test_a_swell_nests_one_tick_per_required_hit():
     """Every hit a swell asks for is its own nested object."""
-    swell = Swell(0.0, 2000.0)
+    swell = Swell()
+    swell.StartTime = 0.0
+    swell.Duration = 2000.0
     swell.RequiredHits = 7
     swell.ApplyDefaults(ControlPointInfo(), BeatmapDifficulty())
 

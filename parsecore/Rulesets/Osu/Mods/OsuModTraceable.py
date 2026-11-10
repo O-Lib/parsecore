@@ -24,14 +24,27 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Mods.ModTracable import ModTracable
 from parsecore.Rulesets.Mods.ModType import ModType
+from parsecore.Rulesets.Objects.HitObject import HitObject
+from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
+from parsecore.Rulesets.Osu.Objects.SpinnerTick import SpinnerTick
 
 
-class OsuModTraceable(Mod):
+class OsuModTraceable(ModTracable):
     """Put your faith in the approach circles..."""
 
     Name = "Traceable"
     Acronym = "TC"
     Description = "Put your faith in the approach circles..."
-    Type = ModType.Fun
+    Type = ModType.DifficultyIncrease
+    Ranked = True
+
+    @staticmethod
+    def IsFirstAdjustableObject(hit_object: HitObject) -> bool:
+        """Check if a hit object is eligible for traceable visibility adjustments.
+
+        Args:
+            hit_object: The hit object to test.
+        """
+        return not (isinstance(hit_object, Spinner) or isinstance(hit_object, SpinnerTick))

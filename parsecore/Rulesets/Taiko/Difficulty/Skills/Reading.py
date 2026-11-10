@@ -24,13 +24,18 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
 from parsecore.Rulesets.Difficulty.Skills.StrainDecaySkill import StrainDecaySkill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Taiko.Difficulty.Evaluators import ReadingEvaluator
-from parsecore.Rulesets.Taiko.Difficulty.Skills.Stamina import index_in_mono_streak
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+    TaikoDifficultyHitObject,
+)
 from parsecore.Rulesets.Taiko.Objects.Hit import Hit
 
 
@@ -40,7 +45,7 @@ class Reading(StrainDecaySkill):
     SkillMultiplier = 1.0
     StrainDecayBase = 0.4
 
-    def __init__(self, mods: list | None = None) -> None:
+    def __init__(self, mods: list[Mod]) -> None:
         """Create the reading skill.
 
         Args:
@@ -62,12 +67,14 @@ class Reading(StrainDecaySkill):
         if not isinstance(current.BaseObject, Hit):
             return 0.0
 
-        index = index_in_mono_streak(current)
+        taiko_object = cast(TaikoDifficultyHitObject, current)
+        mono_streak = taiko_object.ColourData.MonoStreak
+        index = mono_streak.HitObjects.index(taiko_object) if mono_streak is not None else 0
 
         self._current_strain *= DiffUtils.Logistic(index, 4, -1 / 25.0, 0.5) + 0.5
         self._current_strain *= self.StrainDecayBase
         self._current_strain += (
-            ReadingEvaluator.EvaluateDifficultyOf(current) * self.SkillMultiplier
+            ReadingEvaluator.EvaluateDifficultyOf(taiko_object) * self.SkillMultiplier
         )
 
         return self._current_strain

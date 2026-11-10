@@ -31,11 +31,13 @@ from typing import Protocol, runtime_checkable
 class IApplicableToRate(Protocol):
     """A mod that speeds the beatmap up or slows it down."""
 
-    def ApplyToRate(self, time: float, rate: float) -> float:
+    def ApplyToRate(self, time: float, rate: float = 1.0) -> float:
         """Return the rate in effect at a point in time.
 
         Args:
             time: The time in the beatmap.
             rate: The rate before this mod is applied.
+
+        Returns:
+            The adjusted playback rate.
         """
-        ...

@@ -85,7 +85,7 @@ class _EmptyBeatmap:
 def test_a_mania_beatmap_takes_its_columns_from_its_circle_size():
     """A beatmap written for mania says how many columns it has."""
     for keys in (4, 5, 7):
-        beatmap = convert(decode_mania(notes_in(0, keys=keys), keys=keys))
+        beatmap = convert(decode_mania(notes_in(0, keys=keys), keys=keys), [])
         assert beatmap.TotalColumns == keys
 
 
@@ -145,8 +145,8 @@ def test_a_converted_beatmap_always_comes_out_the_same():
     """The columns are drawn at random from a seed the beatmap itself sets."""
     decoded = decode_osu(circles(40))
 
-    first = [h.Column for h in convert(decoded).HitObjects]
-    second = [h.Column for h in convert(decoded).HitObjects]
+    first = [h.Column for h in convert(decoded, []).HitObjects]
+    second = [h.Column for h in convert(decoded, []).HitObjects]
 
     assert first == second
 
@@ -160,8 +160,8 @@ def test_the_seed_comes_from_the_beatmap_s_own_settings():
     """
     objects = circles(40, positions=WANDERING)
 
-    lenient = [h.Column for h in convert(decode_osu(objects, od=3.0)).HitObjects]
-    strict = [h.Column for h in convert(decode_osu(objects, od=9.0)).HitObjects]
+    lenient = [h.Column for h in convert(decode_osu(objects, od=3.0), []).HitObjects]
+    strict = [h.Column for h in convert(decode_osu(objects, od=9.0), []).HitObjects]
 
     assert lenient != strict
 
@@ -174,8 +174,8 @@ def test_a_run_of_circles_on_one_spot_is_mirrored_rather_than_drawn():
     """
     objects = circles(40)
 
-    lenient = [h.Column for h in convert(decode_osu(objects, od=3.0)).HitObjects]
-    strict = [h.Column for h in convert(decode_osu(objects, od=9.0)).HitObjects]
+    lenient = [h.Column for h in convert(decode_osu(objects, od=3.0), []).HitObjects]
+    strict = [h.Column for h in convert(decode_osu(objects, od=9.0), []).HitObjects]
 
     assert lenient == strict
 
@@ -238,8 +238,8 @@ def _key_mod(keys: int):
 
 def test_a_spinner_becomes_a_hold_when_it_is_long_enough():
     """A spinner of at least a tenth of a second is held rather than tapped."""
-    long_spinner = convert(decode_osu("256,192,1000,12,0,2000\n"))
-    short_spinner = convert(decode_osu("256,192,1000,12,0,1050\n"))
+    long_spinner = convert(decode_osu("256,192,1000,12,0,2000\n"), [])
+    short_spinner = convert(decode_osu("256,192,1000,12,0,1050\n"), [])
 
     assert isinstance(long_spinner.HitObjects[0], HoldNote)
     assert isinstance(short_spinner.HitObjects[0], Note)
@@ -248,7 +248,7 @@ def test_a_spinner_becomes_a_hold_when_it_is_long_enough():
 
 def test_a_slider_becomes_more_than_one_object():
     """A slider long enough to hold turns into notes across the stage."""
-    beatmap = convert(decode_osu("100,192,1000,2,0,L|300:192,1,200\n"))
+    beatmap = convert(decode_osu("100,192,1000,2,0,L|300:192,1,200\n"), [])
 
     assert beatmap.HitObjects
 

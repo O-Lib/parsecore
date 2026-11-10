@@ -29,7 +29,11 @@ from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
 )
 from parsecore.Rulesets.Difficulty.Skills.StrainSkill import StrainSkill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Taiko.Difficulty.Evaluators import StaminaEvaluator
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+    TaikoDifficultyHitObject,
+)
 
 SKILL_MULTIPLIER = 1.1
 STRAIN_DECAY_BASE = 0.4
@@ -61,12 +65,7 @@ def index_in_mono_streak(hit_object) -> int:
 class Stamina(StrainSkill):
     """The strain of drumming a passage fast enough to keep up."""
 
-    def __init__(
-        self,
-        mods: list | None = None,
-        single_colour_stamina: bool = False,
-        is_convert: bool = False,
-    ) -> None:
+    def __init__(self, mods: list[Mod], single_colour_stamina: bool = False, is_convert: bool = False) -> None:
         """Create the stamina skill.
 
         Args:
@@ -101,7 +100,12 @@ class Stamina(StrainSkill):
             StaminaEvaluator.EvaluateDifficultyOf(current) * SKILL_MULTIPLIER
         )
 
-        index = index_in_mono_streak(current)
+        current_object = current if isinstance(current, TaikoDifficultyHitObject) else None
+        index = (
+            current_object.ColourData.MonoStreak.HitObjects.index(current_object)
+            if current_object is not None
+            else 0
+        )
 
         # A long run of one colour is harder than the same notes alternating,
         # but only where the mapper chose it rather than a conversion.
@@ -136,7 +140,7 @@ class Stamina(StrainSkill):
         if self.SingleColourStamina:
             return 0.0
 
-        previous = current.Previous(0)
+        previous = current.Previous()
         if previous is None:
             return 0.0
 

@@ -68,3 +68,17 @@ def AlmostEquals(
         acceptable_difference: How far apart the two may be.
     """
     return abs(value1 - value2) <= acceptable_difference
+
+
+def Clamp(value, minimum, maximum):
+    """Restrict a value to lie within a given range.
+
+    Args:
+        value: The value to restrict.
+        minimum: The lower bound.
+        maximum: The upper bound.
+
+    Returns:
+        The value clamped between minimum and maximum.
+    """
+    return max(minimum, min(value, maximum))

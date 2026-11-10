@@ -26,9 +26,11 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from parsecore.Beatmaps.Legacy.LegacyHitObjectType import LegacyHitObjectType
+
 
 @runtime_checkable
 class IHasLegacyHitObjectType(Protocol):
     """An object carrying the raw type flags it was parsed from."""
 
-    LegacyType: int
+    LegacyType: LegacyHitObjectType

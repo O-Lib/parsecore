@@ -24,69 +24,71 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Beatmaps.BeatmapConverter import BeatmapConverter
+from parsecore.Beatmaps.BeatmapProcessor import BeatmapProcessor
+from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
 from parsecore.Rulesets.Difficulty.DifficultyAttributes import DifficultyAttributes
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
 from parsecore.Rulesets.Difficulty.Skills.Skill import Skill
-from parsecore.Rulesets.Difficulty.TimedDifficultyAttributes import (
-    TimedDifficultyAttributes,
-)
+from parsecore.Rulesets.Mods.Mod import Mod
 
 
 class DifficultyCalculator:
     """Calculates how hard a beatmap is for one ruleset."""
 
-    def __init__(self, beatmap, original_beatmap=None) -> None:
+    def __init__(self, beatmap: WorkingBeatmap) -> None:
         """Create a calculator for a beatmap.
 
         Args:
-            beatmap: The beatmap to calculate difficulty for, as the ruleset
-                plays it.
-            original_beatmap: The same beatmap as it was decoded, before it was
-                converted and before any mod touched its settings. Only osu!
-                reads it, and only to work out what osu!stable would have
-                scored the beatmap at. Defaults to the playable beatmap, which
-                is right whenever no mod changes the difficulty settings.
+            beatmap: The beatmap to calculate difficulty for, as the ruleset plays it.
         """
-        self.Beatmap = beatmap
-        self.OriginalBeatmap = beatmap if original_beatmap is None else original_beatmap
+        self.WorkingBeatmap = beatmap
+        self.Beatmap: Beatmap = Beatmap()
 
-    def CreateSkills(self, beatmap, mods: list, clock_rate: float) -> list[Skill]:
+        self.playable_mods: list[Mod] = []
+
+    @property
+    def converter_type(self) -> type[BeatmapConverter]:
+        """Return the ruleset's specific BeatmapConverter class."""
+        raise NotImplementedError
+
+    @property
+    def processor_type(self) -> type[BeatmapProcessor] | None:
+        """Return the ruleset's specific BeatmapProcessor class."""
+        raise NotImplementedError
+
+    def CreateSkills(self, beatmap: Beatmap, mods: list[Mod]) -> list[Skill]:
         """Return the skills this ruleset measures.
 
         Args:
             beatmap: The beatmap being calculated.
             mods: The mods in effect.
-            clock_rate: The rate the beatmap is played at.
         """
         raise NotImplementedError
 
-    def CreateDifficultyHitObjects(
-        self, beatmap, clock_rate: float
-    ) -> list[DifficultyHitObject]:
+    def CreateDifficultyHitObjects(self, beatmap: Beatmap, mods: list[Mod]) -> list[DifficultyHitObject]:
         """Return the objects the skills walk, in time order.
 
         Args:
             beatmap: The beatmap being calculated.
-            clock_rate: The rate the beatmap is played at.
+            mods: The mods to create difficulty objects.
         """
         raise NotImplementedError
 
-    def CreateDifficultyAttributes(
-        self, beatmap, mods: list, skills: list[Skill], clock_rate: float
-    ) -> DifficultyAttributes:
+    def CreateDifficultyAttributes(self, beatmap: Beatmap, mods: list[Mod], skills: list[Skill]) -> DifficultyAttributes:
         """Reduce the processed skills to this ruleset's attributes.
 
         Args:
             beatmap: The beatmap being calculated.
             mods: The mods in effect.
             skills: The skills, already fed every object.
-            clock_rate: The rate the beatmap is played at.
         """
         raise NotImplementedError
 
-    def Calculate(self, mods: list | None = None) -> DifficultyAttributes:
+    def Calculate(self, mods: list[Mod]) -> DifficultyAttributes:
         """Calculate the difficulty of the beatmap.
 
         Args:
@@ -95,59 +97,39 @@ class DifficultyCalculator:
         Returns:
             The ruleset's difficulty attributes.
         """
-        mods = list(mods or [])
-        clock_rate = self.GetClockRate(mods)
+        mods = mods
 
-        skills = self.CreateSkills(self.Beatmap, mods, clock_rate)
-        objects = self.CreateDifficultyHitObjects(self.Beatmap, clock_rate)
+        self._pre_process(mods)
 
-        for hit_object in objects:
+        skills = self.CreateSkills(self.Beatmap, mods)
+
+        if not self.Beatmap.HitObjects:
+            return self.CreateDifficultyAttributes(self.Beatmap, self.playable_mods, skills)
+
+        for hit_object in self._get_difficulty_objects():
             for skill in skills:
                 skill.Process(hit_object)
 
         return self.CreateDifficultyAttributes(
-            self.Beatmap, mods, skills, clock_rate
+            self.Beatmap, mods, skills
         )
 
-    def CalculateTimed(self, mods: list | None = None) -> list[TimedDifficultyAttributes]:
-        """Calculate difficulty after each object, for a live graph.
+    def _pre_process(self, mods: list[Mod]) -> None:
+        """Pre-process mods and prepare the playable beatmap instance for difficulty calculation.
 
         Args:
-            mods: The mods to calculate for.
+            mods: The list of mods in effect.
+        """
+        self.playable_mods = [m.DeepClone() for m in mods]
+        self.Beatmap = self.WorkingBeatmap.GetPlayableBeatmap(
+            self.converter_type, self.processor_type, self.playable_mods
+        )
+
+    def _get_difficulty_objects(self) -> list[DifficultyHitObject]:
+        """Create and return the list of difficulty hit objects ordered by start time.
 
         Returns:
-            The attributes measured after every object, in time order.
+            A list of difficulty hit objects sorted chronologically.
         """
-        mods = list(mods or [])
-        clock_rate = self.GetClockRate(mods)
-
-        skills = self.CreateSkills(self.Beatmap, mods, clock_rate)
-        objects = self.CreateDifficultyHitObjects(self.Beatmap, clock_rate)
-
-        results: list[TimedDifficultyAttributes] = []
-        for hit_object in objects:
-            for skill in skills:
-                skill.Process(hit_object)
-            results.append(
-                TimedDifficultyAttributes(
-                    hit_object.EndTime * clock_rate,
-                    self.CreateDifficultyAttributes(
-                        self.Beatmap, mods, skills, clock_rate
-                    ),
-                )
-            )
-        return results
-
-    @staticmethod
-    def GetClockRate(mods: list) -> float:
-        """Return the rate the beatmap is played at under a set of mods.
-
-        Args:
-            mods: The mods in effect.
-        """
-        rate = 1.0
-        for mod in mods:
-            apply = getattr(mod, "ApplyToRate", None)
-            if callable(apply):
-                rate = apply(0.0, rate)
-        return rate
+        difficulty_objects = self.CreateDifficultyHitObjects(self.Beatmap, self.playable_mods)
+        return sorted(difficulty_objects, key=lambda h: h.BaseObject.StartTime)

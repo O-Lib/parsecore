@@ -24,6 +24,13 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+        TaikoDifficultyHitObject,
+    )
+
 # The spacing changes a player reads as musical rather than as a mistake.
 COMMON_RATIOS = (
     1.0 / 1,
@@ -41,7 +48,7 @@ COMMON_RATIOS = (
 class TaikoRhythmData:
     """The rhythm groupings one note belongs to, and its spacing ratio."""
 
-    def __init__(self, current) -> None:
+    def __init__(self, current: TaikoDifficultyHitObject) -> None:
         """Read a note's spacing ratio against the note before it.
 
         The raw ratio is snapped to the nearest musical one, so a rhythm the

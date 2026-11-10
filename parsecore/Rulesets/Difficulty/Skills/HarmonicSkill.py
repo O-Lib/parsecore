@@ -29,6 +29,7 @@ from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
 )
 from parsecore.Rulesets.Difficulty.Skills.Skill import Skill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
 
 
 class HarmonicSkill(Skill):
@@ -37,7 +38,7 @@ class HarmonicSkill(Skill):
     HarmonicScale = 1.0
     DecayExponent = 0.9
 
-    def __init__(self, mods: list | None = None) -> None:
+    def __init__(self, mods: list[Mod]) -> None:
         """Create a harmonic skill.
 
         Args:
@@ -107,12 +108,13 @@ class HarmonicSkill(Skill):
         """
         if not self.ObjectDifficulties:
             return 0.0
-        if self.ObjectWeightSum == 0:
+
+        if self.ObjectWeightSum == 0.0:
             return 0.0
 
         # The top difficulty if every object were equally hard.
         consistent_top_object = difficulty_value / self.ObjectWeightSum
-        if consistent_top_object == 0:
+        if consistent_top_object == 0.0:
             return 0.0
 
         return sum(

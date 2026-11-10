@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import io
 import math
+from collections.abc import Callable
+from typing import TextIO
 
 from parsecore.Audio.HitSampleInfo import (
     BANK_DRUM,
@@ -36,24 +38,34 @@ from parsecore.Audio.HitSampleInfo import (
     HIT_NORMAL,
     HIT_WHISTLE,
     FileHitSampleInfo,
+    HitSampleInfo,
+    LegacyHitSampleInfo,
 )
 from parsecore.Beatmaps.ControlPoints.DifficultyControlPoint import (
     DifficultyControlPoint,
 )
 from parsecore.Beatmaps.ControlPoints.SampleControlPoint import SampleControlPoint
 from parsecore.Beatmaps.ControlPoints.TimingControlPoint import TimingControlPoint
-from parsecore.Beatmaps.Legacy.LegacyControlPointInfo import LegacyControlPointInfo
+from parsecore.Beatmaps.IBeatmap import IBeatmap
+from parsecore.Beatmaps.Legacy.LegacyControlPointInfo import (
+    LegacyControlPointInfo,
+    LegacySampleControlPoint,
+)
 from parsecore.Beatmaps.Legacy.LegacyEffectFlags import LegacyEffectFlags
 from parsecore.Beatmaps.Legacy.LegacyEventType import LegacyEventType
 from parsecore.Beatmaps.Legacy.LegacyHitObjectType import LegacyHitObjectType
 from parsecore.Beatmaps.Legacy.LegacyHitSoundType import LegacyHitSoundType
 from parsecore.Beatmaps.Legacy.LegacySampleBank import LegacySampleBank
-from parsecore.Rulesets.Objects.HitObject import CONTROL_POINT_LENIENCY
-from parsecore.Rulesets.Objects.Legacy.ConvertHitObjectParser import (
-    LegacyHitSampleInfo,
-)
+from parsecore.Rulesets.Objects.HitObject import CONTROL_POINT_LENIENCY, HitObject
+from parsecore.Rulesets.Objects.Types.IHasCombo import IHasCombo
 from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
-from parsecore.Rulesets.Objects.Types.PathType import SplineType
+from parsecore.Rulesets.Objects.Types.IHasPath import IHasPath
+from parsecore.Rulesets.Objects.Types.IHasPathWithRepeats import IHasPathWithRepeats
+from parsecore.Rulesets.Objects.Types.IHasPosition import IHasPosition
+from parsecore.Rulesets.Objects.Types.IHasRepeats import IHasRepeats, SpanCount
+from parsecore.Rulesets.Objects.Types.IHasSliderVelocity import IHasSliderVelocity
+from parsecore.Rulesets.Objects.Types.IHasXPosition import IHasXPosition
+from parsecore.Rulesets.Objects.Types.PathType import PathType, SplineType
 from parsecore.Utils.Vector2 import Vector2, f32
 
 # The format version osu!lazer writes. Anything at or above this is a file
@@ -70,7 +82,7 @@ MAX_COMBO_COLOUR_COUNT = 8
 class LegacyBeatmapEncoder:
     """Turns a beatmap back into the text a ``.osu`` file holds."""
 
-    def __init__(self, beatmap) -> None:
+    def __init__(self, beatmap: IBeatmap) -> None:
         """Create an encoder for a beatmap.
 
         Args:
@@ -88,7 +100,7 @@ class LegacyBeatmapEncoder:
                 "written to the legacy beatmap format"
             )
 
-    def Encode(self, writer) -> None:
+    def Encode(self, writer: TextIO) -> None:
         """Write the whole beatmap.
 
         Args:
@@ -96,7 +108,7 @@ class LegacyBeatmapEncoder:
         """
         _write_line(writer, f"osu file format v{FIRST_LAZER_VERSION}")
 
-        for section in (
+        sections: tuple[Callable[[TextIO], None], ...] = (
             self._handle_general,
             self._handle_editor,
             self._handle_metadata,
@@ -105,7 +117,9 @@ class LegacyBeatmapEncoder:
             self._handle_control_points,
             self._handle_colours,
             self._handle_hit_objects,
-        ):
+        )
+
+        for section in sections:
             _write_line(writer, "")
             section(writer)
 
@@ -115,7 +129,7 @@ class LegacyBeatmapEncoder:
         self.Encode(writer)
         return writer.getvalue()
 
-    def _handle_general(self, writer) -> None:
+    def _handle_general(self, writer: TextIO) -> None:
         """Write the general section.
 
         Args:
@@ -124,6 +138,7 @@ class LegacyBeatmapEncoder:
         beatmap = self.Beatmap
         info = beatmap.BeatmapInfo
         metadata = beatmap.Metadata
+        control_points = beatmap.ControlPointInfo
 
         _write_line(writer, "[General]")
 
@@ -133,12 +148,14 @@ class LegacyBeatmapEncoder:
         _write_line(writer, f"PreviewTime: {_num(metadata.PreviewTime)}")
         _write_line(writer, f"Countdown: {int(info.Countdown)}")
 
-        sample_points = getattr(beatmap.ControlPointInfo, "SamplePoints", None)
+        sample_points = (
+            control_points.SamplePoints if isinstance(control_points, LegacyControlPointInfo) else None
+        )
         first_sample = (
             sample_points[0] if sample_points else SampleControlPoint()
         )
         _write_line(
-            writer, f"SampleSet: {_to_legacy_sample_bank(first_sample.SampleBank).name}"
+            writer, f"SampleSet: {_to_legacy_sample_bank(first_sample.SampleBank)}"
         )
         _write_line(writer, f"StackLeniency: {_num_f32(info.StackLeniency)}")
         _write_line(writer, f"Mode: {self._online_ruleset_id}")
@@ -158,7 +175,7 @@ class LegacyBeatmapEncoder:
         if info.SamplesMatchPlaybackRate:
             _write_line(writer, "SamplesMatchPlaybackRate: 1")
 
-    def _handle_editor(self, writer) -> None:
+    def _handle_editor(self, writer: TextIO) -> None:
         """Write the editor section.
 
         Args:
@@ -182,7 +199,7 @@ class LegacyBeatmapEncoder:
             + ",".join(_num(v) for v in info.SliderVelocityPresets),
         )
 
-    def _handle_metadata(self, writer) -> None:
+    def _handle_metadata(self, writer: TextIO) -> None:
         """Write the metadata section.
 
         Args:
@@ -210,7 +227,7 @@ class LegacyBeatmapEncoder:
         if info.BeatmapSetID > 0:
             _write_line(writer, f"BeatmapSetID: {info.BeatmapSetID}")
 
-    def _handle_difficulty(self, writer) -> None:
+    def _handle_difficulty(self, writer: TextIO) -> None:
         """Write the difficulty section.
 
         Args:
@@ -229,7 +246,7 @@ class LegacyBeatmapEncoder:
         _write_line(writer, f"SliderMultiplier: {_num(difficulty.SliderMultiplier)}")
         _write_line(writer, f"SliderTickRate: {_num(difficulty.SliderTickRate)}")
 
-    def _handle_events(self, writer) -> None:
+    def _handle_events(self, writer: TextIO) -> None:
         """Write the events section.
 
         Args:
@@ -251,7 +268,7 @@ class LegacyBeatmapEncoder:
                 f"{_num(break_period.StartTime)},{_num(break_period.EndTime)}",
             )
 
-    def _handle_colours(self, writer) -> None:
+    def _handle_colours(self, writer: TextIO) -> None:
         """Write the combo colours, if the beatmap names any.
 
         Args:
@@ -270,7 +287,7 @@ class LegacyBeatmapEncoder:
                 f"Combo{1 + index}: {colour.R},{colour.G},{colour.B},{colour.A}",
             )
 
-    def _handle_hit_objects(self, writer) -> None:
+    def _handle_hit_objects(self, writer: TextIO) -> None:
         """Write every hit object.
 
         Args:
@@ -281,7 +298,7 @@ class LegacyBeatmapEncoder:
         for hit_object in self.Beatmap.HitObjects:
             self._handle_hit_object(writer, hit_object)
 
-    def _handle_control_points(self, writer) -> None:
+    def _handle_control_points(self, writer: TextIO) -> None:
         """Write the timing section.
 
         Sample banks and slider velocities live on the objects in osu! and in
@@ -302,13 +319,11 @@ class LegacyBeatmapEncoder:
         # points are ignored.
         scroll_speed_as_slider_velocity = self._online_ruleset_id in (1, 3)
 
-        self._extract_difficulty_control_points(
-            legacy_points, scroll_speed_as_slider_velocity
-        )
+        self._extract_difficulty_control_points(legacy_points, scroll_speed_as_slider_velocity)
         self._extract_sample_control_points(legacy_points)
 
         if scroll_speed_as_slider_velocity:
-            for point in list(legacy_points.EffectPoints):
+            for point in legacy_points.EffectPoints:
                 legacy_points.Add(
                     point.Time,
                     DifficultyControlPoint(SliderVelocity=point.ScrollSpeed),
@@ -357,8 +372,12 @@ class LegacyBeatmapEncoder:
             _output_control_point(writer, properties, False)
             last_properties = properties
 
+    @staticmethod
     def _properties_for(
-        self, legacy_points, time: float, update_sample_bank: bool, last
+        legacy_points: LegacyControlPointInfo,
+            time: float,
+            update_sample_bank: bool,
+            last_property: _ControlPointProperties
     ) -> _ControlPointProperties:
         """Return the file's view of the control points at one moment.
 
@@ -366,7 +385,7 @@ class LegacyBeatmapEncoder:
             legacy_points: Every control point, including the extracted ones.
             time: The moment to read at.
             update_sample_bank: Whether this group may change the sample bank.
-            last: The properties written for the group before this one.
+            last_property: The properties written for the group before this one.
         """
         timing_point = legacy_points.TimingPointAt(time)
         difficulty_point = legacy_points.DifficultyPointAt(time)
@@ -375,7 +394,7 @@ class LegacyBeatmapEncoder:
 
         # Running a sample through the point uncovers what the file stored,
         # such as the custom bank index.
-        temp_sample = sample_point.ApplyTo(LegacyHitSampleInfo(Name=""))
+        temp_sample = sample_point.ApplyTo(LegacyHitSampleInfo(name=""))
         custom_sample_bank = _to_legacy_custom_sample_bank(temp_sample)
 
         effect_flags = LegacyEffectFlags.None_
@@ -384,26 +403,53 @@ class LegacyBeatmapEncoder:
         if timing_point.OmitFirstBarLine:
             effect_flags |= LegacyEffectFlags.OmitFirstBarLine
 
+        sample_bank = (
+                int(_to_legacy_sample_bank(temp_sample.Bank))
+                if update_sample_bank
+                else last_property.SampleBank
+            )
+
         return _ControlPointProperties(
             SliderVelocity=difficulty_point.SliderVelocity,
             TimingSignature=timing_point.TimeSignature.Numerator,
-            SampleBank=(
-                int(_to_legacy_sample_bank(temp_sample.Bank))
-                if update_sample_bank
-                else last.SampleBank
-            ),
+            SampleBank=sample_bank,
             # An unset custom bank keeps whatever the last group had.
             CustomSampleBank=(
                 custom_sample_bank
                 if custom_sample_bank >= 0
-                else last.CustomSampleBank
+                else last_property.CustomSampleBank
             ),
             SampleVolume=temp_sample.Volume,
             EffectFlags=effect_flags,
         )
 
+    def _collect_difficulty_control_points(self, scroll_speed_as_slider_velocity: bool) -> list[DifficultyControlPoint]:
+        """Collect difficulty control points implied by the beatmap's hit objects.
+
+        Args:
+            scroll_speed_as_slider_velocity: Whether scroll speed is handled as slider velocity.
+
+        Returns:
+            A list of extracted difficulty control points.
+        """
+        if scroll_speed_as_slider_velocity:
+            return []
+
+        hit_objects = self.Beatmap.HitObjects
+        difficulty_control_points = []
+        for hit_object in hit_objects:
+            if isinstance(hit_object, IHasSliderVelocity):
+                difficulty_control_points.append(
+                    DifficultyControlPoint(
+                        Time=hit_object.StartTime,
+                        SliderVelocity=hit_object.SliderVelocityMultiplier,
+                    )
+                )
+
+        return difficulty_control_points
+
     def _extract_difficulty_control_points(
-        self, legacy_points, scroll_speed_as_slider_velocity: bool
+            self, legacy_points: LegacyControlPointInfo, scroll_speed_as_slider_velocity: bool
     ) -> None:
         """Add the slider velocities the objects carry as control points.
 
@@ -413,71 +459,61 @@ class LegacyBeatmapEncoder:
                 scroll speed as a slider velocity, in which case the objects'
                 own velocities are ignored.
         """
-        if scroll_speed_as_slider_velocity:
-            return
+        last_relevant_difficulty_point: DifficultyControlPoint | None = None
+        difficulty_points = sorted(
+            self._collect_difficulty_control_points(scroll_speed_as_slider_velocity),
+            key=lambda dp: dp.Time
+        )
+        for difficulty_point in difficulty_points:
+            if not difficulty_point.IsRedundant(last_relevant_difficulty_point):
+                legacy_points.Add(difficulty_point.Time, difficulty_point)
+                last_relevant_difficulty_point = difficulty_point
 
-        collected = [
-            DifficultyControlPoint(
-                Time=h.StartTime, SliderVelocity=h.SliderVelocityMultiplier
-            )
-            for h in self.Beatmap.HitObjects
-            if hasattr(h, "SliderVelocityMultiplier")
-        ]
-
-        last_relevant = None
-        for point in sorted(collected, key=lambda p: p.Time):
-            if last_relevant is None or not point.IsRedundant(last_relevant):
-                legacy_points.Add(point.Time, point)
-                last_relevant = point
-
-    def _extract_sample_control_points(self, legacy_points) -> None:
+    def _extract_sample_control_points(self, legacy_points: LegacyControlPointInfo) -> None:
         """Add the sample banks the objects carry as control points.
 
         Args:
             legacy_points: The points being built up.
         """
-        collected = list(self._collect_sample_control_points(self.Beatmap.HitObjects))
-
-        last_relevant = None
-        for point in sorted(collected, key=lambda p: p.Time):
-            if last_relevant is None or not point.IsRedundant(last_relevant):
+        last_relevant_sample_point: SampleControlPoint | None = None
+        sample_points = sorted(
+            self._collect_sample_control_points(self.Beatmap.HitObjects),
+            key=lambda sp: sp.Time
+        )
+        for point in sample_points:
+            if not point.IsRedundant(last_relevant_sample_point):
                 legacy_points.Add(point.Time, point)
-                last_relevant = point
+                last_relevant_sample_point = point
 
-    def _collect_sample_control_points(self, hit_objects):
-        """Yield a sample point for every sound the objects make.
-
-        Args:
-            hit_objects: The objects to walk, nested ones included.
-        """
+    def _collect_sample_control_points(self, hit_objects: list[HitObject]) -> list[SampleControlPoint]:
+        """Yield a sample point for every sound the objects make."""
+        sample_control_points = []
         for hit_object in hit_objects:
-            node_samples = getattr(hit_object, "NodeSamples", None)
-
-            if node_samples is not None and hasattr(hit_object, "SpanCount"):
-                span_duration = hit_object.Duration / hit_object.SpanCount
-
+            if isinstance(hit_object, IHasRepeats):
+                span_duration = hit_object.Duration / SpanCount(hit_object)
+                node_samples = hit_object.NodeSamples
                 for i, samples in enumerate(node_samples):
                     node_time = hit_object.StartTime + i * span_duration
-
                     if samples:
-                        yield _sample_point_for(node_time, samples)
-
+                        sample_control_points.append(_sample_point_for(node_time, samples))
                     if (
                         span_duration > CONTROL_POINT_LENIENCY + 1
                         and hit_object.Samples
                         and i < len(node_samples) - 1
                     ):
-                        yield _sample_point_for(
-                            node_time + CONTROL_POINT_LENIENCY + 1, hit_object.Samples
+                        sample_control_points.append(
+                            _sample_point_for(node_time + CONTROL_POINT_LENIENCY + 1, hit_object.Samples)
                         )
+
             elif hit_object.Samples:
-                yield _sample_point_for(hit_object.GetEndTime(), hit_object.Samples)
+                sample_control_points.append(_sample_point_for(hit_object.GetEndTime(), hit_object.Samples))
 
-            yield from self._collect_sample_control_points(
-                hit_object.NestedHitObjects
-            )
+            for nested in self._collect_sample_control_points(hit_object.NestedHitObjects):
+                sample_control_points.append(nested)
+                
+        return sample_control_points
 
-    def _handle_hit_object(self, writer, hit_object) -> None:
+    def _handle_hit_object(self, writer: TextIO, hit_object: HitObject) -> None:
         """Write one hit object.
 
         Args:
@@ -487,21 +523,22 @@ class LegacyBeatmapEncoder:
         position = DEFAULT_POSITION
 
         if self._online_ruleset_id in (0, 2):
-            position = Vector2(hit_object.X, hit_object.Y)
+            if isinstance(hit_object, IHasPosition):
+                position = hit_object.Position
         elif self._online_ruleset_id == 3:
             total_columns = int(max(1, self.Beatmap.Difficulty.CircleSize))
+            X = hit_object.X if isinstance(hit_object, IHasXPosition) else 0.0
             position = Vector2(
-                int(math.floor((hit_object.X + 0.5) * (512.0 / total_columns))),
+                int(math.floor((X + 0.5) * (512.0 / total_columns))),
                 position.Y,
             )
-
         writer.write(f"{_num(position.X)},")
         writer.write(f"{_num(position.Y)},")
         writer.write(f"{_num(hit_object.StartTime)},")
         writer.write(f"{int(self._object_type(hit_object))},")
         writer.write(f"{int(_to_legacy_hit_sound_type(hit_object.Samples))},")
 
-        if hasattr(hit_object, "Path"):
+        if isinstance(hit_object, IHasPath):
             self._add_path_data(writer, hit_object, position)
             writer.write(self._sample_bank(hit_object.Samples))
         else:
@@ -512,18 +549,19 @@ class LegacyBeatmapEncoder:
 
         _write_line(writer, "")
 
-    def _object_type(self, hit_object) -> int:
+    def _object_type(self, hit_object: HitObject) -> int:
         """Return the type flags one object is written with.
 
         Args:
             hit_object: The object to classify.
         """
-        object_type = LegacyHitObjectType(getattr(hit_object, "ComboOffset", 0) << 4)
+        object_type = 0
+        if isinstance(hit_object, IHasCombo):
+            object_type = LegacyHitObjectType(hit_object.ComboOffset << 4)
+            if hit_object.NewCombo:
+                object_type |= LegacyHitObjectType.NewCombo
 
-        if getattr(hit_object, "NewCombo", False):
-            object_type |= LegacyHitObjectType.NewCombo
-
-        if hasattr(hit_object, "Path"):
+        if isinstance(hit_object, IHasPath):
             object_type |= LegacyHitObjectType.Slider
         elif isinstance(hit_object, IHasDuration):
             object_type |= (
@@ -536,7 +574,7 @@ class LegacyBeatmapEncoder:
 
         return object_type
 
-    def _add_path_data(self, writer, hit_object, position: Vector2) -> None:
+    def _add_path_data(self, writer: TextIO, hit_object: IHasPath, position: Vector2) -> None:
         """Write a slider's path, repeats and per-node sounds.
 
         Args:
@@ -557,51 +595,49 @@ class LegacyBeatmapEncoder:
                 )
                 writer.write("|" if i != len(control_points) - 1 else ",")
 
-        repeat_count = getattr(hit_object, "RepeatCount", 0)
-        span_count = repeat_count + 1
+        curve_data = hit_object if isinstance(hit_object, IHasPathWithRepeats) else None
+        repeat_count = curve_data.RepeatCount if curve_data is not None else 0
+        expected_distance = hit_object.Path.ExpectedDistance
+        expected = expected_distance if expected_distance is not None else hit_object.Path.Distance
 
-        writer.write(f"{_num(span_count)},")
-        expected = hit_object.Path.ExpectedDistance
-        writer.write(
-            f"{_num(expected if expected is not None else hit_object.Path.Distance)},"
-        )
+        writer.write(f"{_num(repeat_count + 1)},")
+        writer.write(f"{_num(expected)},")
 
-        node_samples = getattr(hit_object, "NodeSamples", None)
-        if node_samples is None:
-            return
+        if curve_data is not None:
+            for i in range(SpanCount(curve_data) + 1):
+                sound = (
+                    int(_to_legacy_hit_sound_type(curve_data.NodeSamples[i]))
+                    if i < len(curve_data.NodeSamples)
+                    else 0
+                )
+                writer.write(f"{sound}")
+                writer.write("|" if i != SpanCount(curve_data) else ",")
 
-        for i in range(span_count + 1):
-            sound = (
-                int(_to_legacy_hit_sound_type(node_samples[i]))
-                if i < len(node_samples)
-                else 0
-            )
-            writer.write(str(sound))
-            writer.write("|" if i != span_count else ",")
+            for i in range(SpanCount(curve_data) + 1):
+                sample_bank = (
+                    self._sample_bank(curve_data.NodeSamples[i], True)
+                    if i < len(curve_data.NodeSamples)
+                    else "0:0"
+                )
+                writer.write(sample_bank)
+                writer.write("|" if i != SpanCount(curve_data) else ",")
 
-        for i in range(span_count + 1):
-            writer.write(
-                self._sample_bank(node_samples[i], True)
-                if i < len(node_samples)
-                else "0:0"
-            )
-            writer.write("|" if i != span_count else ",")
-
-    def _add_end_time_data(self, writer, hit_object) -> None:
+    def _add_end_time_data(self, writer: TextIO, hit_object: HitObject) -> None:
         """Write an object's end time.
 
         Args:
             writer: The text stream to write to.
             hit_object: The object to write.
         """
+        end_time_data = hit_object if isinstance(hit_object, IHasDuration) else None
         object_type = self._object_type(hit_object)
 
         # A mania hold writes its end time as though it were sample data.
         suffix = ":" if object_type == LegacyHitObjectType.Hold else ","
 
-        writer.write(f"{_num(hit_object.EndTime)}{suffix}")
+        writer.write(f"{_num(end_time_data.EndTime)}{suffix}")
 
-    def _sample_bank(self, samples: list, banks_only: bool = False) -> str:
+    def _sample_bank(self, samples: list[HitSampleInfo], banks_only: bool = False) -> str:
         """Return the sample banks an object is written with.
 
         Args:
@@ -626,7 +662,7 @@ class LegacyBeatmapEncoder:
         if banks_only:
             return result
 
-        named = next((s for s in samples if s.Name), None)
+        named = next(s for s in samples if s.Name)
         custom_sample_bank = _to_legacy_custom_sample_bank(named)
         sample_filename = next(
             (s.LookupNames[0] for s in samples if isinstance(s, FileHitSampleInfo)),
@@ -705,7 +741,7 @@ class _ControlPointProperties:
 
 
 def _output_control_point(
-    writer, properties: _ControlPointProperties, is_timing_point: bool
+    writer: TextIO, properties: _ControlPointProperties, is_timing_point: bool
 ) -> None:
     """Write the tail of one timing section line.
 
@@ -723,7 +759,7 @@ def _output_control_point(
     _write_line(writer, "")
 
 
-def _sample_point_for(time: float, samples: list) -> SampleControlPoint:
+def _sample_point_for(time: float, samples: list[HitSampleInfo]) -> SampleControlPoint:
     """Return the control point that would produce a set of samples.
 
     Args:
@@ -738,15 +774,15 @@ def _sample_point_for(time: float, samples: list) -> SampleControlPoint:
 
     custom_index = max(_custom_index_of(s) for s in samples)
 
-    return SampleControlPoint(
-        Time=time,
-        SampleVolume=volume,
-        SampleBank=bank,
-        CustomSampleBank=custom_index,
-    )
+    legacy_sp = LegacySampleControlPoint()
+    legacy_sp.Time = time
+    legacy_sp.SampleVolume = volume
+    legacy_sp.SampleBank = bank
+    legacy_sp.CustomSampleBank = custom_index
+    return legacy_sp
 
 
-def _custom_index_of(sample) -> int:
+def _custom_index_of(sample: HitSampleInfo) -> int:
     """Return which numbered custom bank a sample belongs to.
 
     Args:
@@ -761,16 +797,16 @@ def _custom_index_of(sample) -> int:
         except ValueError:
             pass
 
-    return 1 if getattr(sample, "UseBeatmapSamples", False) else -1
+    return 1 if sample.UseBeatmapSamples else -1
 
 
-def _to_legacy_custom_sample_bank(sample) -> int:
+def _to_legacy_custom_sample_bank(sample: HitSampleInfo) -> int:
     """Return the custom bank index a sample carries.
 
     Args:
         sample: The sample to read, which may be nothing.
     """
-    if isinstance(sample, (LegacyHitSampleInfo, FileHitSampleInfo)):
+    if isinstance(sample, LegacyHitSampleInfo):
         return sample.CustomSampleBank
 
     return 0
@@ -795,7 +831,7 @@ def _to_legacy_sample_bank(bank: str | None) -> LegacySampleBank:
             return LegacySampleBank.None_
 
 
-def _to_legacy_hit_sound_type(samples: list) -> LegacyHitSoundType:
+def _to_legacy_hit_sound_type(samples: list[HitSampleInfo]) -> LegacyHitSoundType:
     """Return the sound flags a set of samples is written as.
 
     Args:
@@ -815,7 +851,7 @@ def _to_legacy_hit_sound_type(samples: list) -> LegacyHitSoundType:
     return sound_type
 
 
-def _path_type_prefix(path_type) -> str:
+def _path_type_prefix(path_type: PathType) -> str:
     """Return the letter a path segment's type is written as.
 
     Args:
@@ -830,8 +866,6 @@ def _path_type_prefix(path_type) -> str:
             return "P|"
         case SplineType.Linear:
             return "L|"
-
-    return ""
 
 
 def _file_name(path: str) -> str:
@@ -852,7 +886,7 @@ def _flag(value: bool) -> str:
     return "1" if value else "0"
 
 
-def _num(value) -> str:
+def _num(value: bool | float) -> str:
     """Return a number the way .NET writes one.
 
     A value that happens to be whole is written without a decimal point, and
@@ -872,7 +906,7 @@ def _num(value) -> str:
     return repr(float(value))
 
 
-def _num_f32(value) -> str:
+def _num_f32(value: float) -> str:
     """Return a single-precision number the way .NET writes one.
 
     A ``float`` prints with as few digits as still read back as the same
@@ -893,7 +927,7 @@ def _num_f32(value) -> str:
     return repr(float(value))
 
 
-def _write_line(writer, text: str) -> None:
+def _write_line(writer: TextIO, text: str) -> None:
     """Write one line, ended the way osu! ends them.
 
     Args:

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import bisect
 import math
+from collections.abc import Callable
 
 from parsecore.Rulesets.Objects.PathControlPoint import PathControlPoint
 from parsecore.Rulesets.Objects.Types.PathType import LINEAR, PathType, SplineType
@@ -48,15 +49,41 @@ class SliderPath:
             expected_distance: The distance the beatmap declares for this
                 slider; the path is trimmed or extended to match it.
         """
-        self.ControlPoints: list[PathControlPoint] = list(control_points or [])
+        self.ControlPoints: list[PathControlPoint] = (
+            control_points if control_points is not None else []
+        )
         self.ExpectedDistance: float | None = expected_distance
 
         self.OptimiseCatmull = False
+
+        self.invalidated: Callable[[], None] | None = None
 
         self._optimised_length = 0.0
         self._calculated_path: list[Vector2] = []
         self._cumulative_length: list[float] = []
         self._valid = False
+
+    @classmethod
+    def from_type(
+            cls,
+            Type: PathType,
+            ControlPoints: list[Vector2],
+            expected_distance: float | None = None
+    ) -> SliderPath:
+        """Create a SliderPath from a path type, control point positions, and optional expected distance.
+
+        Args:
+            Type: The type of the curve/path.
+            ControlPoints: The positions of the control points.
+            expected_distance: The declared expected distance of the path.
+
+        Returns:
+            A new SliderPath instance.
+        """
+        return cls(
+            [PathControlPoint(c, Type if i == 0 else None) for i, c in enumerate(ControlPoints)],
+            expected_distance
+        )
 
     @property
     def Distance(self) -> float:
@@ -86,6 +113,8 @@ class SliderPath:
     def invalidate(self) -> None:
         """Mark the cached geometry as stale so it is recomputed on next use."""
         self._valid = False
+        if self.invalidated is not None:
+            self.invalidated()
 
     def _ensure_valid(self) -> None:
         """Recompute the flattened path and its lengths if they are stale."""

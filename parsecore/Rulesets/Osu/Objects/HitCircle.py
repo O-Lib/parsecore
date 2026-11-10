@@ -29,3 +29,8 @@ from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 
 class HitCircle(OsuHitObject):
     """A circle the player clicks once."""
+
+    def CreateJudgement(self):
+        """Return the judgement this object is scored with."""
+        from parsecore.Rulesets.Osu.Judgements.OsuJudgement import OsuJudgement
+        return OsuJudgement()

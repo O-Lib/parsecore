@@ -21,6 +21,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+from typing import cast
 
 import pytest
 
@@ -35,6 +36,7 @@ from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
 from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapConverter import OsuBeatmapConverter
 from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapProcessor import OsuBeatmapProcessor
 from parsecore.Rulesets.Osu.Objects.HitCircle import HitCircle
+from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 from parsecore.Rulesets.Osu.Objects.Slider import Slider
 
 HEADER = (
@@ -64,14 +66,14 @@ def test_stack_height_reaches_nested_objects():
     difficulty comes out too high.
     """
     playable = _playable("0,0,1000,2,0,L|200:0,1,160\n")
-    slider = playable.HitObjects[0]
+    slider = cast(Slider, playable.HitObjects[0])
     assert isinstance(slider, Slider)
     assert slider.NestedHitObjects, "expected the slider to nest objects"
 
     slider.StackHeight = 3
 
     for nested in slider.NestedHitObjects:
-        assert nested.StackHeight == 3
+        assert cast(Slider, nested).StackHeight == 3
 
 
 def test_preempt_time_is_a_whole_number():
@@ -108,7 +110,9 @@ def test_first_object_after_a_break_starts_a_combo():
         "100,100,1000,1,0\n"
         "200,100,5000,1,0\n"
     )
-    assert beatmap.HitObjects[1].NewCombo is True
+
+    osu_object = cast(OsuHitObject, beatmap.HitObjects[1])
+    assert osu_object.NewCombo is True
 
 
 def test_slider_velocity_uses_a_precision_adjusted_beat_length():

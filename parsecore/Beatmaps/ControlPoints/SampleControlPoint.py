@@ -24,12 +24,16 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from parsecore.Audio.HitSampleInfo import BANK_NORMAL, HitSampleInfo
 from parsecore.Beatmaps.ControlPoints.ControlPoint import ControlPoint
+from parsecore.Utils.Precision import Clamp
 
-DEFAULT_BANK = BANK_NORMAL
+if TYPE_CHECKING:
+    from parsecore.Audio.HitSampleInfo import HitSampleInfo
+
+DEFAULT_BANK = "normal"
 
 
 @dataclass(slots=True)
@@ -38,7 +42,10 @@ class SampleControlPoint(ControlPoint):
 
     SampleBank: str = DEFAULT_BANK
     SampleVolume: int = 100
-    CustomSampleBank: int = 0
+
+    def __post_init__(self) -> None:
+        """Clamp the sample volume to the range osu! accepts (0 to 100)."""
+        self.SampleVolume = Clamp(self.SampleVolume, 0, 100)
 
     def ApplyTo(self, hit_sample_info: HitSampleInfo) -> HitSampleInfo:
         """Return ``hit_sample_info`` with this point's bank and volume filled in.
@@ -51,57 +58,12 @@ class SampleControlPoint(ControlPoint):
         Returns:
             The completed sample.
         """
-        from parsecore.Audio.HitSampleInfo import FileHitSampleInfo
-        from parsecore.Rulesets.Objects.Legacy.ConvertHitObjectParser import (
-            LegacyHitSampleInfo,
-        )
-
-        if isinstance(hit_sample_info, FileHitSampleInfo):
-            # A sample named by file is identified by that file, so only its
-            # volume is still open to a control point.
-            return replace(
-                hit_sample_info,
-                Volume=(
-                    hit_sample_info.Volume
-                    if hit_sample_info.Volume > 0
-                    else self.SampleVolume
-                ),
-            )
-
-        if isinstance(hit_sample_info, LegacyHitSampleInfo):
-            # A sample keeps whatever the beatmap stated about it and takes
-            # the rest from here.
-            custom = (
-                hit_sample_info.CustomSampleBank
-                if hit_sample_info.CustomSampleBank > 0
-                else self.CustomSampleBank
-            )
-            return replace(
-                hit_sample_info,
-                CustomSampleBank=custom,
-                Suffix=str(custom) if custom >= 2 else None,
-                Volume=(
-                    hit_sample_info.Volume
-                    if hit_sample_info.Volume > 0
-                    else self.SampleVolume
-                ),
-                Bank=(
-                    hit_sample_info.Bank
-                    if hit_sample_info.BankSpecified
-                    else self.SampleBank
-                ),
-            )
-
         return hit_sample_info.With(
             Bank=hit_sample_info.Bank,
-            Volume=(
-                hit_sample_info.Volume
-                if hit_sample_info.Volume > 0
-                else self.SampleVolume
-            ),
+            Volume=hit_sample_info.Volume if hit_sample_info.Volume > 0 else self.SampleVolume
         )
 
-    def IsRedundant(self, existing: ControlPoint) -> bool:
+    def IsRedundant(self, existing: ControlPoint | None) -> bool:
         """Return whether this point matches ``existing``.
 
         Args:
@@ -111,7 +73,23 @@ class SampleControlPoint(ControlPoint):
             isinstance(existing, SampleControlPoint)
             and self.SampleBank == existing.SampleBank
             and self.SampleVolume == existing.SampleVolume
-            and self.CustomSampleBank == existing.CustomSampleBank
+        )
+
+    def __eq__(self, value: object) -> bool:
+        """Check equality with another sample control point.
+
+        Args:
+            value: The object to compare with.
+
+        Returns:
+            ``True`` if sample bank, volume, and time match.
+        """
+        if not isinstance(value, SampleControlPoint):
+            raise NotImplementedError
+        return (
+            super().__eq__(value)
+            and self.SampleBank == value.SampleBank
+            and self.SampleVolume == value.SampleVolume
         )
 
 

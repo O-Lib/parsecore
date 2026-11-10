@@ -23,15 +23,20 @@ SOFTWARE.
 """
 
 import math
+from typing import cast
 
 import pytest
 
 from parsecore.Beatmaps.Formats.LegacyBeatmapDecoder import LegacyBeatmapDecoder
 from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
-from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapConverter import OsuBeatmapConverter
-from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapProcessor import OsuBeatmapProcessor
+from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyAttributes import (
+    OsuDifficultyAttributes,
+)
 from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyCalculator import (
     OsuDifficultyCalculator,
+)
+from parsecore.Rulesets.Osu.Difficulty.OsuPerformanceAttributes import (
+    OsuPerformanceAttributes,
 )
 from parsecore.Rulesets.Osu.Difficulty.OsuPerformanceCalculator import (
     OsuPerformanceCalculator,
@@ -46,25 +51,23 @@ from parsecore.Scoring.ScoreInfo import ScoreInfo
 def _prepared(path, mods=None):
     """Return a playable beatmap and its difficulty attributes."""
     decoded = LegacyBeatmapDecoder.FromPath(str(path))
-    playable = WorkingBeatmap(decoded).GetPlayableBeatmap(
-        OsuBeatmapConverter, OsuBeatmapProcessor, mods
-    )
-    return playable, OsuDifficultyCalculator(playable).Calculate(mods or [])
+    working = WorkingBeatmap(decoded)
+    return working, OsuDifficultyCalculator(working).Calculate(mods or [])
 
 
 def _score(playable, attributes, accuracy=1.0, combo=None, misses=0, oks=0, mods=None):
     """Build a score for a beatmap."""
-    total = len(playable.HitObjects)
+    total = len(playable.Beatmap.HitObjects)
     return ScoreInfo(
         Accuracy=accuracy,
         MaxCombo=attributes.MaxCombo if combo is None else combo,
         Mods=list(mods or []),
-        BeatmapDifficulty=playable.Difficulty,
+        BeatmapInfo=playable.Beatmap.BeatmapInfo,
         Statistics={
             HitResult.Great: total - misses - oks,
             HitResult.Ok: oks,
             HitResult.Miss: misses,
-            HitResult.SliderTailHit: attributes.SliderCount,
+            HitResult.SliderTailHit: cast(OsuDifficultyAttributes, attributes).SliderCount,
         },
     )
 
@@ -96,10 +99,12 @@ def test_hit_windows_are_floored_and_narrowed():
 
 def test_perfect_score_scores_something(beatmap_files):
     """A full combo with no mistakes is worth a positive amount."""
-    playable, attributes = _prepared(_osu_files(beatmap_files)[0])
+    working, attributes = _prepared(_osu_files(beatmap_files)[0])
     result = OsuPerformanceCalculator().Calculate(
-        _score(playable, attributes), attributes
+        _score(working, attributes), attributes
     )
+
+    result = cast(OsuPerformanceAttributes, result)
 
     assert result.Total > 0
     assert result.Aim > 0
@@ -127,6 +132,8 @@ def test_misses_and_lost_combo_reduce_performance(beatmap_files):
         attributes,
     )
 
+    dropped = cast(OsuPerformanceAttributes, dropped)
+
     assert dropped.Total < perfect.Total
     assert dropped.EffectiveMissCount >= 3
 
@@ -153,7 +160,8 @@ def test_autopilot_removes_aim_value(beatmap_files):
     result = OsuPerformanceCalculator().Calculate(
         _score(playable, attributes, mods=mods), attributes
     )
-    assert result.Aim == 0.0
+
+    assert cast(OsuPerformanceAttributes, result).Aim == 0.0
 
 
 def test_relax_removes_speed_and_accuracy_value(beatmap_files):
@@ -165,6 +173,8 @@ def test_relax_removes_speed_and_accuracy_value(beatmap_files):
     result = OsuPerformanceCalculator().Calculate(
         _score(playable, attributes, mods=mods), attributes
     )
+
+    result = cast(OsuPerformanceAttributes, result)
     assert result.Speed == 0.0
     assert result.Accuracy == 0.0
 

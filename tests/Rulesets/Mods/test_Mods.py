@@ -22,12 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from typing import cast
+
 import pytest
 
 from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
 from parsecore.Beatmaps.Formats.LegacyBeatmapDecoder import LegacyBeatmapDecoder
 from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
-from parsecore.Rulesets.Difficulty.DifficultyCalculator import DifficultyCalculator
 from parsecore.Rulesets.Mods.ModDoubleTime import ModDoubleTime
 from parsecore.Rulesets.Mods.ModEasy import ModEasy
 from parsecore.Rulesets.Mods.ModHalfTime import ModHalfTime
@@ -41,15 +42,17 @@ from parsecore.Rulesets.Osu.Mods.OsuModHardRock import (
 )
 from parsecore.Rulesets.Osu.Mods.OsuModHidden import OsuModHidden
 from parsecore.Rulesets.Osu.Objects.HitCircle import HitCircle
+from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 from parsecore.Rulesets.Osu.Objects.Slider import Slider
+from parsecore.Utils import ModUtils
 from parsecore.Utils.Vector2 import Vector2, f32
 
 
 def test_rate_mods_change_the_clock_rate():
     """Rate mods multiply the clock rate the calculator uses."""
-    assert DifficultyCalculator.GetClockRate([]) == pytest.approx(1.0)
-    assert DifficultyCalculator.GetClockRate([ModDoubleTime()]) == pytest.approx(1.5)
-    assert DifficultyCalculator.GetClockRate([ModHalfTime()]) == pytest.approx(0.75)
+    assert ModUtils.CalculateRateWithMods([]) == pytest.approx(1.0)
+    assert ModUtils.CalculateRateWithMods([ModDoubleTime()]) == pytest.approx(1.5)
+    assert ModUtils.CalculateRateWithMods([ModHalfTime()]) == pytest.approx(0.75)
 
 
 def test_hard_rock_base_only_raises_the_drain_rate():
@@ -87,7 +90,9 @@ def test_osu_hard_rock_raises_difficulty_and_caps_at_ten():
 
 def test_osu_hard_rock_mirrors_the_playfield():
     """Hard rock flips every object across the middle of the playfield."""
-    circle = HitCircle(1000.0, Vector2(120, 100))
+    circle = HitCircle()
+    circle.StartTime = 1000.0
+    circle.Position = Vector2(120, 100)
     OsuModHardRock().ApplyToHitObject(circle)
 
     assert circle.Position == Vector2(120, 284)
@@ -189,6 +194,7 @@ def test_hidden_shortens_the_fade_in():
     assert slider.TimeFadeIn == before[hit_objects.index(slider)]
 
     for nested in slider.NestedHitObjects:
+        nested = cast(OsuHitObject, nested)
         assert nested.TimeFadeIn == nested.TimePreempt * 0.4
 
 

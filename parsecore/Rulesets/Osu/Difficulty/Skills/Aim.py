@@ -25,6 +25,7 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
@@ -34,10 +35,14 @@ from parsecore.Rulesets.Difficulty.Skills.VariableLengthStrainSkill import (
     VariableLengthStrainSkill,
 )
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Osu.Difficulty.Evaluators.Aim import (
     AgilityEvaluator,
     FlowAimEvaluator,
     SnapAimEvaluator,
+)
+from parsecore.Rulesets.Osu.Difficulty.Preprocessing.OsuDifficultyHitObject import (
+    OsuDifficultyHitObject,
 )
 from parsecore.Rulesets.Osu.Mods.OsuModAutopilot import OsuModAutopilot
 from parsecore.Rulesets.Osu.Mods.OsuModMagnetised import OsuModMagnetised
@@ -64,7 +69,7 @@ CHUNK_SIZE = 20
 class Aim(VariableLengthStrainSkill):
     """Measures how hard a beatmap is to aim."""
 
-    def __init__(self, mods: list | None = None, include_sliders: bool = True) -> None:
+    def __init__(self, mods: list[Mod], include_sliders: bool) -> None:
         """Create the aim skill.
 
         Args:
@@ -109,7 +114,7 @@ class Aim(VariableLengthStrainSkill):
             # Autopilot aims for the player.
             return 0.0
 
-        decay = self._strain_decay(current.AdjustedDeltaTime)
+        decay = self._strain_decay(cast(OsuDifficultyHitObject, current).AdjustedDeltaTime)
         self._current_strain *= decay
         self._current_strain += self._calculate_adjusted_difficulty(current) * (
             1 - decay
@@ -149,7 +154,7 @@ class Aim(VariableLengthStrainSkill):
             total_difficulty *= 1.0 - magnetised.AttractionStrength
 
         total_difficulty *= (
-            0.985 + DiffUtils.Pow(max(0.0, current.OverallDifficulty), 2) / 4000
+            0.985 + DiffUtils.Pow(max(0.0, cast(OsuDifficultyHitObject, current).OverallDifficulty), 2) / 4000
         )
 
         return total_difficulty
@@ -178,7 +183,7 @@ class Aim(VariableLengthStrainSkill):
         p_snap = _calculate_snap_flow_probability(
             flow_difficulty / combined_snap_difficulty
             if combined_snap_difficulty
-            else float("nan")
+            else math.nan
         )
         p_flow = 1 - p_snap
 
@@ -238,6 +243,8 @@ class Aim(VariableLengthStrainSkill):
         difficulty = 0.0
         time = 0.0
 
+        strains = self._get_reduced_strain_peaks()
+
         for strain in self._get_reduced_strain_peaks():
             start_time = time
             end_time = time + strain.SectionLength / self.MaxSectionLength
@@ -256,7 +263,11 @@ class Aim(VariableLengthStrainSkill):
 
         The hardest few seconds of a map are reduced towards a baseline, so a
         single extreme spike cannot carry the whole rating. The reduction runs
-        in small chunks to keep it smooth.
+        in chunks of section peaks, scaling down the highest strains relative
+        to the baseline strain.
+
+        Returns:
+            A list of strain peaks after applying strain reduction.
         """
         strains = [p for p in self.GetCurrentStrainPeaks() if p.Value > 0]
 

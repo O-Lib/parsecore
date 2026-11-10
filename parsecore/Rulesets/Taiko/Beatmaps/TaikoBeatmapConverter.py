@@ -24,6 +24,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
 from parsecore.Beatmaps.BeatmapConverter import BeatmapConverter
 from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
 from parsecore.Beatmaps.ControlPoints.EffectControlPoint import EffectControlPoint
@@ -32,12 +33,17 @@ from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
     GetPrecisionAdjustedBeatLength,
 )
 from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
+from parsecore.Rulesets.Objects.Types.IHasPath import IHasPath
+from parsecore.Rulesets.Objects.Types.IHasPathWithRepeats import IHasPathWithRepeats
+from parsecore.Rulesets.Objects.Types.IHasRepeats import IHasRepeats, SpanCount
+from parsecore.Rulesets.Objects.Types.IHasSliderVelocity import IHasSliderVelocity
 from parsecore.Rulesets.Taiko.Objects.DrumRoll import DrumRoll
 from parsecore.Rulesets.Taiko.Objects.Hit import Hit
 from parsecore.Rulesets.Taiko.Objects.Swell import Swell
 from parsecore.Rulesets.Taiko.Objects.TaikoStrongableHitObject import (
     TaikoStrongableHitObject,
 )
+from parsecore.Utils.Precision import AlmostEquals
 from parsecore.Utils.Vector2 import f32
 
 # Taiko scrolls faster than osu! for the same slider multiplier. osu! writes
@@ -69,6 +75,9 @@ def RequiredSwellHitsPerSecond(overall_difficulty: float) -> float:
 
     Args:
         overall_difficulty: The beatmap's overall difficulty.
+
+    Returns:
+        The number of required swell hits per second.
     """
     return (
         BeatmapDifficulty.DifficultyRange(overall_difficulty, 3.0, 5.0, 7.5)
@@ -79,7 +88,7 @@ def RequiredSwellHitsPerSecond(overall_difficulty: float) -> float:
 class TaikoBeatmapConverter(BeatmapConverter):
     """Turns decoded objects into taiko notes, rolls and swells."""
 
-    def __init__(self, beatmap) -> None:
+    def __init__(self, beatmap: Beatmap) -> None:
         """Create a converter for a beatmap.
 
         Args:
@@ -95,12 +104,16 @@ class TaikoBeatmapConverter(BeatmapConverter):
         return True
 
     def CreateBeatmap(self):
-        """Return an empty taiko beatmap."""
+        """Return an empty taiko beatmap.
+
+        Returns:
+            A new empty TaikoBeatmap instance.
+        """
         from parsecore.Rulesets.Taiko.Beatmaps.TaikoBeatmap import TaikoBeatmap
 
         return TaikoBeatmap()
 
-    def ConvertBeatmap(self, original):
+    def ConvertBeatmap(self, original: Beatmap) -> Beatmap:
         """Convert the beatmap, then fix up what only the whole map shows.
 
         Args:
@@ -122,7 +135,7 @@ class TaikoBeatmapConverter(BeatmapConverter):
         return converted
 
     @staticmethod
-    def _add_scroll_speed_points(original, converted) -> None:
+    def _add_scroll_speed_points(original: Beatmap, converted: Beatmap) -> None:
         """Turn each slider's own velocity into a scroll speed change.
 
         osu! stores a slider's velocity on the object; taiko has no such thing
@@ -136,24 +149,23 @@ class TaikoBeatmapConverter(BeatmapConverter):
         last_scroll_speed = 1.0
 
         for hit_object in original.HitObjects:
-            next_scroll_speed = getattr(
-                hit_object, "SliderVelocityMultiplier", None
-            )
-            if next_scroll_speed is None:
+            if not isinstance(hit_object, IHasSliderVelocity):
                 continue
 
-            current = converted.ControlPointInfo.EffectPointAt(hit_object.StartTime)
+            has_slider_velocity = hit_object
+            next_scroll_speed = has_slider_velocity.SliderVelocityMultiplier
+            current_effect_point = converted.ControlPointInfo.EffectPointAt(hit_object.StartTime)
 
-            if abs(last_scroll_speed - next_scroll_speed) > SCROLL_SPEED_PRECISION:
+            if not AlmostEquals(last_scroll_speed, next_scroll_speed, SCROLL_SPEED_PRECISION):
                 last_scroll_speed = next_scroll_speed
                 converted.ControlPointInfo.Add(
                     hit_object.StartTime,
                     EffectControlPoint(
-                        KiaiMode=current.KiaiMode, ScrollSpeed=next_scroll_speed
+                        KiaiMode=current_effect_point.KiaiMode, ScrollSpeed=next_scroll_speed
                     ),
                 )
 
-    def ConvertHitObject(self, original: HitObject, beatmap) -> list[HitObject]:
+    def ConvertHitObject(self, original: HitObject, beatmap: Beatmap) -> list[HitObject]:
         """Convert one decoded object into its taiko counterpart.
 
         Args:
@@ -165,69 +177,60 @@ class TaikoBeatmapConverter(BeatmapConverter):
         """
         samples = original.Samples
 
-        if hasattr(original, "Path"):
-            return self._convert_path(original, beatmap, samples)
+        if isinstance(original, IHasPath):
+            path_data = original
+            should_convert, taiko_duration, tick_spacing = self._should_convert_slider_to_hits(
+                original, beatmap, path_data
+            )
+            if should_convert:
+                all_samples = (
+                    original.NodeSamples
+                    if isinstance(original, IHasPathWithRepeats)
+                    else [samples]
+                )
 
-        if isinstance(original, IHasDuration):
-            hits_per_second = RequiredSwellHitsPerSecond(
-                beatmap.Difficulty.OverallDifficulty
-            )
-            swell = Swell(original.StartTime, original.Duration)
-            swell.Samples = samples
-            swell.RequiredHits = int(
-                max(1.0, original.Duration / 1000 * hits_per_second)
-            )
+                hits = []
+                i = 0
+                j = original.StartTime
+                while j <= original.StartTime + taiko_duration + tick_spacing / 8:
+                    current_samples = all_samples[i]
+                    hit = Hit()
+                    hit.StartTime = j
+                    hit.Samples = current_samples
+                    hits.append(hit)
+
+                    i = (i + 1) % len(all_samples)
+
+                    if AlmostEquals(0, tick_spacing):
+                        break
+
+                    j += tick_spacing
+
+                return hits
+            else:
+                drum_roll = DrumRoll()
+                drum_roll.StartTime = original.StartTime
+                drum_roll.Samples = original.Samples
+                drum_roll.Duration = taiko_duration
+                return [drum_roll]
+
+        elif isinstance(original, IHasDuration):
+            hit_multiplier = RequiredSwellHitsPerSecond(beatmap.Difficulty.OverallDifficulty)
+
+            swell = Swell()
+            swell.StartTime = original.StartTime
+            swell.Samples = original.Samples
+            swell.Duration = original.Duration
+            swell.RequiredHits = int(max(1, original.Duration / 1000 * hit_multiplier))
             return [swell]
 
-        hit = Hit(original.StartTime)
+        hit = Hit()
+        hit.StartTime = original.StartTime
         hit.Samples = samples
         return [hit]
 
-    def _convert_path(self, original, beatmap, samples) -> list[HitObject]:
-        """Convert a slider into either single notes or a drum roll.
-
-        Args:
-            original: The decoded slider.
-            beatmap: The beatmap being converted.
-            samples: The slider's samples.
-
-        Returns:
-            The taiko objects the slider becomes.
-        """
-        as_hits, taiko_duration, tick_spacing = self._should_convert_slider_to_hits(
-            original, beatmap
-        )
-
-        if not as_hits:
-            roll = DrumRoll(original.StartTime, taiko_duration)
-            roll.Samples = samples
-            return [roll]
-
-        node_samples = getattr(original, "NodeSamples", None)
-        all_samples = node_samples if node_samples else [samples]
-
-        objects: list[HitObject] = []
-        index = 0
-        time = original.StartTime
-        # The eighth-of-a-tick slack lets a note land on the slider's very end.
-        end = original.StartTime + taiko_duration + tick_spacing / 8
-        while time <= end:
-            hit = Hit(time)
-            hit.Samples = all_samples[index]
-            objects.append(hit)
-
-            index = (index + 1) % len(all_samples)
-
-            # A slider with no spacing left to give yields a single note.
-            if abs(tick_spacing) <= ALMOST_ZERO:
-                break
-
-            time += tick_spacing
-
-        return objects
-
     def _should_convert_slider_to_hits(
-        self, original, beatmap
+        self, original: HitObject, beatmap: Beatmap, path_data: IHasPath
     ) -> tuple[bool, int, float]:
         """Decide whether a slider is drummed out as single notes.
 
@@ -243,8 +246,8 @@ class TaikoBeatmapConverter(BeatmapConverter):
             Whether to emit notes, the slider's length in taiko milliseconds,
             and how far apart the notes would sit.
         """
-        spans = getattr(original, "SpanCount", 1)
-        expected = original.Path.ExpectedDistance
+        spans = SpanCount(original) if isinstance(original, IHasRepeats) else 1
+        expected = path_data.Path.ExpectedDistance
         distance = expected if expected is not None else 0.0
 
         distance *= VELOCITY_MULTIPLIER
@@ -252,7 +255,7 @@ class TaikoBeatmapConverter(BeatmapConverter):
 
         timing_point = beatmap.ControlPointInfo.TimingPointAt(original.StartTime)
 
-        if hasattr(original, "SliderVelocityMultiplier"):
+        if isinstance(original, IHasSliderVelocity):
             beat_length = GetPrecisionAdjustedBeatLength(
                 original, timing_point, "taiko"
             )

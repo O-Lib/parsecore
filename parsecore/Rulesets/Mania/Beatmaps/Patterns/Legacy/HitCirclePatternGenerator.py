@@ -25,12 +25,16 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Audio.HitSampleInfo import HIT_CLAP, HIT_FINISH
+from parsecore.Beatmaps.Beatmap import Beatmap
 from parsecore.Rulesets.Mania.Beatmaps.Patterns.Legacy.LegacyPatternGenerator import (
     LegacyPatternGenerator,
 )
 from parsecore.Rulesets.Mania.Beatmaps.Patterns.Legacy.PatternType import PatternType
 from parsecore.Rulesets.Mania.Beatmaps.Patterns.Pattern import Pattern
 from parsecore.Rulesets.Mania.Objects.Note import Note
+from parsecore.Rulesets.Objects.HitObject import HitObject
+from parsecore.Rulesets.Objects.Types.IHasPosition import IHasPosition
+from parsecore.Utils.LegacyRandom import LegacyRandom
 from parsecore.Utils.Vector2 import Vector2
 
 
@@ -39,11 +43,11 @@ class HitCirclePatternGenerator(LegacyPatternGenerator):
 
     def __init__(
         self,
-        random,
-        hit_object,
-        beatmap,
+        random: LegacyRandom,
+        hit_object: HitObject,
+        beatmap: Beatmap,
         total_columns: int,
-        previous_pattern,
+        previous_pattern: Pattern,
         previous_time: float,
         previous_position: Vector2,
         density: float,
@@ -70,7 +74,7 @@ class HitCirclePatternGenerator(LegacyPatternGenerator):
         timing_point = beatmap.ControlPointInfo.TimingPointAt(hit_object.StartTime)
         effect_point = beatmap.ControlPointInfo.EffectPointAt(hit_object.StartTime)
 
-        position = getattr(hit_object, "Position", None) or Vector2()
+        position = hit_object.Position if isinstance(hit_object, IHasPosition) else Vector2()
         position_separation = (position - previous_position).length()
         time_separation = hit_object.StartTime - previous_time
 
@@ -120,7 +124,7 @@ class HitCirclePatternGenerator(LegacyPatternGenerator):
         """
         return bool(self._convert_type & flag)
 
-    def Generate(self) -> list:
+    def Generate(self) -> list[Pattern]:
         """Return the single pattern of notes for this circle."""
         pattern = self._generate_core()
 
@@ -440,6 +444,8 @@ class HitCirclePatternGenerator(LegacyPatternGenerator):
             pattern: The pattern to add to.
             column: The column to place the note in.
         """
-        note = Note(self.HitObject.StartTime, column)
+        note = Note()
+        note.StartTime = self.HitObject.StartTime
+        note.Column = column
         note.Samples = self.HitObject.Samples
         pattern.Add(note)

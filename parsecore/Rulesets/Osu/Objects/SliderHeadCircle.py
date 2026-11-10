@@ -29,3 +29,13 @@ from parsecore.Rulesets.Osu.Objects.HitCircle import HitCircle
 
 class SliderHeadCircle(HitCircle):
     """The circle at the start of a slider."""
+    
+    def __init__(self) -> None:
+        """Create a slider head circle."""
+        super().__init__()
+        self.ClassicSliderBehaviour: bool = False
+        
+    def CreateJudgement(self):
+        """Return the judgement used for scoring the slider head circle."""
+        from parsecore.Rulesets.Osu.Judgements.OsuJudgement import SliderTickJudgement
+        return SliderTickJudgement() if self.ClassicSliderBehaviour else super().CreateJudgement()

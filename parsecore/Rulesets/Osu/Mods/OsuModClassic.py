@@ -24,21 +24,21 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Rulesets.Mods.IApplicableToHitObject import IApplicableToHitObject
 from parsecore.Rulesets.Mods.ModClassic import ModClassic
+from parsecore.Rulesets.Objects.HitObject import HitObject
+from parsecore.Rulesets.Osu.Objects.Slider import Slider
 
 
-class OsuModClassic(ModClassic):
+class OsuModClassic(ModClassic, IApplicableToHitObject):
     """Feeling nostalgic?"""
+    NoSliderHeadAccuracy: bool = True
 
-    Name = "Classic"
-    Acronym = "CL"
-    Description = "Feeling nostalgic?"
-
-    def __init__(self, no_slider_head_accuracy: bool = True) -> None:
-        """Create the mod.
+    def ApplyToHitObject(self, hit_object: HitObject) -> None:
+        """Apply classic slider settings to the hit object.
 
         Args:
-            no_slider_head_accuracy: Whether slider heads are excluded from
-                accuracy, as they were in osu!stable.
+            hit_object: The object to modify.
         """
-        self.NoSliderHeadAccuracy = no_slider_head_accuracy
+        if isinstance(hit_object, Slider):
+            hit_object.ClassicSliderBehaviour = self.NoSliderHeadAccuracy

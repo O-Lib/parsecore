@@ -24,7 +24,16 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from parsecore.Audio.HitSampleInfo import HIT_NORMAL, HitSampleInfo
+from typing import TYPE_CHECKING
+
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
+from parsecore.Rulesets.Judgements.Judgement import Judgement
+from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
+from parsecore.Rulesets.Scoring.HitWindows import HitWindows
+
+if TYPE_CHECKING:
+    from parsecore.Audio.HitSampleInfo import HitSampleInfo
 
 # A leniency applied when looking up control points, so an object sitting a
 # fraction before a timing point still picks that point up.
@@ -40,11 +49,21 @@ class HitObject:
         Args:
             start_time: The object's time in milliseconds.
         """
-        self.StartTime: float = start_time
+        self._start_time: float = start_time
         self.Samples: list[HitSampleInfo] = []
+        self.Kiai: bool = False
         self._nested_hit_objects: list[HitObject] = []
-        self.HitWindows = None
-        self._judgement = None
+        self.HitWindows: HitWindows | None = None
+        self._judgement: Judgement | None = None
+
+    @property
+    def StartTime(self) -> float:
+        """Return the start time of the object in milliseconds."""
+        return self._start_time
+
+    @StartTime.setter
+    def StartTime(self, value: float) -> None:
+        self._start_time = value
 
     @property
     def NestedHitObjects(self) -> list[HitObject]:
@@ -53,10 +72,9 @@ class HitObject:
 
     def GetEndTime(self) -> float:
         """Return the time this object stops being active."""
-        end_time = getattr(self, "EndTime", None)
-        return self.StartTime if end_time is None else end_time
+        return self.EndTime if isinstance(self, IHasDuration) else self.StartTime
 
-    def ApplyDefaults(self, control_point_info, difficulty) -> None:
+    def ApplyDefaults(self, control_point_info: ControlPointInfo, difficulty: BeatmapDifficulty) -> None:
         """Apply beatmap-wide settings and rebuild the nested objects.
 
         Args:
@@ -73,13 +91,15 @@ class HitObject:
 
         self._nested_hit_objects.sort(key=lambda h: h.StartTime)
 
-    def ApplyDefaultsToSelf(self, control_point_info, difficulty) -> None:
+    def ApplyDefaultsToSelf(self, control_point_info: ControlPointInfo, difficulty: BeatmapDifficulty) -> None:
         """Apply beatmap-wide settings to this object only.
 
         Args:
             control_point_info: The beatmap's control points.
             difficulty: The beatmap's difficulty settings.
         """
+        self.Kiai = control_point_info.EffectPointAt(self.StartTime + CONTROL_POINT_LENIENCY).KiaiMode
+
         if self.HitWindows is None:
             self.HitWindows = self.CreateHitWindows()
         if self.HitWindows is not None:
@@ -102,13 +122,21 @@ class HitObject:
         return self._judgement
 
     def CreateJudgement(self):
-        """Return the judgement this object is scored with."""
+        """Return the judgement this object is scored with.
+
+        Returns:
+            The judgement instance for this object.
+        """
         from parsecore.Rulesets.Judgements.Judgement import Judgement
 
         return Judgement()
 
     def CreateHitWindows(self):
-        """Return the hit windows this object is judged with."""
+        """Return the hit windows this object is judged with.
+
+        Returns:
+            The hit windows instance for this object.
+        """
         from parsecore.Rulesets.Scoring.DefaultHitWindows import DefaultHitWindows
 
         return DefaultHitWindows()
@@ -116,7 +144,7 @@ class HitObject:
     def CreateNestedHitObjects(self) -> None:
         """Generate the objects nested inside this one, if any."""
 
-    def CreateHitSampleInfo(self, sample_name: str = HIT_NORMAL):
+    def CreateHitSampleInfo(self, sample_name: str = "hitnormal"):
         """Return a sample of the given kind, styled like this object's own.
 
         osu! copies the object's normal hit sound and renames it, so the new
@@ -129,7 +157,7 @@ class HitObject:
         Returns:
             The sample to add.
         """
-        existing = next((s for s in self.Samples if s.Name == HIT_NORMAL), None)
+        existing = next((s for s in self.Samples if s.Name == "hitnormal"), None)
         if existing is not None:
             return existing.With(Name=sample_name)
 

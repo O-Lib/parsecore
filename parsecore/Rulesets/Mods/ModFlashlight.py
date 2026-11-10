@@ -36,3 +36,4 @@ class ModFlashlight(Mod):
     Description = "Restricted view area."
     Type = ModType.DifficultyIncrease
     ScoreMultiplier = 1.12
+    Ranked = True

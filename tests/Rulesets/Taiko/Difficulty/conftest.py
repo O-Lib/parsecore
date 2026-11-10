@@ -52,7 +52,8 @@ def build_difficulty_objects(
     time = 0.0
     for character, gap in zip(pattern, gaps, strict=True):
         time += gap
-        note = Hit(time)
+        note = Hit()
+        note.StartTime = time
         note.Samples = (
             [HitSampleInfo(HIT_NORMAL), HitSampleInfo(HIT_CLAP)]
             if character == "k"

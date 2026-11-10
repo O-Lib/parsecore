@@ -31,6 +31,7 @@ from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
 )
 from parsecore.Rulesets.Difficulty.Skills.Skill import Skill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
 
 
 class StrainSkill(Skill):
@@ -39,7 +40,7 @@ class StrainSkill(Skill):
     DecayWeight = 0.9
     SectionLength = 400
 
-    def __init__(self, mods: list | None = None) -> None:
+    def __init__(self, mods: list[Mod]) -> None:
         """Create a strain skill.
 
         Args:
@@ -106,7 +107,7 @@ class StrainSkill(Skill):
         # The top strain if every strain were identical.
         consistent_top_strain = difficulty_value * (1 - self.DecayWeight)
 
-        if consistent_top_strain == 0:
+        if consistent_top_strain == 0.0:
             return float(len(self.ObjectDifficulties))
 
         return sum(

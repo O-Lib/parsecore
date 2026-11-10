@@ -22,6 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+from typing import cast
+
 import pytest
 
 from parsecore.Beatmaps.Formats.LegacyBeatmapDecoder import LegacyBeatmapDecoder
@@ -45,7 +47,7 @@ def _slider(hit_object_line: str, version: int = 14) -> ConvertSlider:
         "[TimingPoints]\n0,500,4,2,0,60,1,0\n"
         f"[HitObjects]\n{hit_object_line}\n"
     )
-    return beatmap.HitObjects[0]
+    return cast(ConvertSlider, beatmap.HitObjects[0])
 
 
 def test_curve_letters_map_to_their_types():

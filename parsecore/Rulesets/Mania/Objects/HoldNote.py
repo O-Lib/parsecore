@@ -24,45 +24,33 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Audio.HitSampleInfo import HitSampleInfo
 from parsecore.Rulesets.Mania.Objects.HeadNote import HeadNote
 from parsecore.Rulesets.Mania.Objects.HoldNoteBody import HoldNoteBody
 from parsecore.Rulesets.Mania.Objects.ManiaHitObject import ManiaHitObject
 from parsecore.Rulesets.Mania.Objects.TailNote import TailNote
+from parsecore.Rulesets.Objects.HitObject import HitObject
+from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
 from parsecore.Rulesets.Scoring.EmptyHitWindows import EmptyHitWindows
 
 
-class HoldNote(ManiaHitObject):
+class HoldNote(ManiaHitObject, IHasDuration):
     """A note held down for a duration."""
 
-    def __init__(
-        self,
-        start_time: float = 0.0,
-        column: int = 0,
-        duration: float = 0.0,
-        play_sliding_samples: bool = False,
-        node_samples: list | None = None,
-    ) -> None:
-        """Create a hold note.
-
-        Args:
-            start_time: When the hold begins.
-            column: The column it is played in.
-            duration: How long it is held for.
-            play_sliding_samples: Whether the beatmap sounds it while held.
-            node_samples: The samples of each end, if the beatmap gave any.
-        """
-        self._duration = duration
+    def __init__(self) -> None:
+        """Create a hold note."""
+        super().__init__()
+        self._duration = 0.0
         self.Head: HeadNote | None = None
         self.Tail: TailNote | None = None
         self.Body: HoldNoteBody | None = None
-        super().__init__(start_time, column)
-        self.PlaySlidingSamples = play_sliding_samples
-        self.NodeSamples = node_samples
+        self.PlaySlidingSamples = False
+        self.NodeSamples: list[list[HitSampleInfo]] | None = None
 
     @property
     def StartTime(self) -> float:
         """Return when the hold begins."""
-        return self._start_time
+        return super().StartTime
 
     @StartTime.setter
     def StartTime(self, value: float) -> None:
@@ -71,7 +59,7 @@ class HoldNote(ManiaHitObject):
         Args:
             value: The time to move it to.
         """
-        self._start_time = value
+        HitObject.StartTime.fset(self, value)
 
         if self.Head is not None:
             self.Head.StartTime = value
@@ -112,7 +100,7 @@ class HoldNote(ManiaHitObject):
     @property
     def Column(self) -> int:
         """Return the column this hold is played in."""
-        return self._column
+        return super().Column
 
     @Column.setter
     def Column(self, value: int) -> None:
@@ -121,7 +109,7 @@ class HoldNote(ManiaHitObject):
         Args:
             value: The column to move it to.
         """
-        self._column = value
+        ManiaHitObject.Column.fset(self, value)
 
         if self.Head is not None:
             self.Head.Column = value
@@ -137,23 +125,34 @@ class HoldNote(ManiaHitObject):
         """Build the head, tail and body the hold is judged through."""
         super().CreateNestedHitObjects()
 
+        node_samples = self.NodeSamples
         # The converter normally supplies these, but an object built by hand
         # still needs something sane to sound.
-        if self.NodeSamples is None:
-            self.NodeSamples = CreateDefaultNodeSamples(self)
+        if node_samples is None:
+            node_samples = CreateDefaultNodeSamples(self)
 
-        self.Head = HeadNote(self.StartTime, self.Column)
-        self.Head.Samples = self.GetNodeSamples(0)
-        self.AddNested(self.Head)
+        head = HeadNote()
+        head.StartTime = self.StartTime
+        head.Column = self.Column
+        head.Samples = self.GetNodeSamples(0)
+        self.Head = head
+        self.AddNested(head)
 
-        self.Tail = TailNote(self.EndTime, self.Column)
-        self.Tail.Samples = self.GetNodeSamples(len(self.NodeSamples) - 1)
-        self.AddNested(self.Tail)
+        tail = TailNote()
+        tail.StartTime = self.EndTime
+        tail.Column = self.Column
+        tail.Samples = self.GetNodeSamples(len(node_samples) - 1)
+        self.Tail = tail
+        self.AddNested(tail)
 
-        self.Body = HoldNoteBody(self.StartTime, self.Column, self.Duration)
-        self.AddNested(self.Body)
+        body = HoldNoteBody()
+        body.StartTime = self.StartTime
+        body.Column = self.Column
+        body.Duration = self.Duration
+        self.Body = body
+        self.AddNested(body)
 
-    def GetNodeSamples(self, node_index: int) -> list:
+    def GetNodeSamples(self, node_index: int) -> list[HitSampleInfo]:
         """Return the samples of one end of the hold.
 
         Args:
@@ -174,7 +173,7 @@ class HoldNote(ManiaHitObject):
         return IgnoreJudgement()
 
 
-def CreateDefaultNodeSamples(hit_object) -> list:
+def CreateDefaultNodeSamples(hit_object: HitObject) -> list[list[HitSampleInfo]]:
     """Return the samples a hold note falls back on.
 
     An osu!mania beatmap sounds a hold only where it starts, so the tail is

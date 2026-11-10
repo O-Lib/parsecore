@@ -24,7 +24,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from parsecore.Beatmaps.ControlPoints.SampleControlPoint import DEFAULT_BANK
+from parsecore.Beatmaps.Formats import Parsing
 
 HIT_NORMAL = "hitnormal"
 HIT_WHISTLE = "hitwhistle"
@@ -39,15 +40,34 @@ ALL_ADDITIONS = (HIT_WHISTLE, HIT_FINISH, HIT_CLAP)
 ALL_BANKS = (BANK_NORMAL, BANK_SOFT, BANK_DRUM)
 
 
-@dataclass(frozen=True, slots=True)
 class HitSampleInfo:
     """One sample: which sound, from which bank, at which volume."""
 
-    Name: str = HIT_NORMAL
-    Bank: str = BANK_NORMAL
-    Suffix: str | None = None
-    Volume: int = 0
-    EditorAutoBank: bool = True
+    def __init__(
+            self,
+            name: str,
+            bank: str = DEFAULT_BANK,
+            suffix: str | None = None,
+            volume: int = 100,
+            editor_auto_bank = True,
+            use_beatmap_samples: bool = False
+    ) -> None:
+        """Create a sample.
+
+        Args:
+            name: The sample name, for example ``hitnormal``.
+            bank: The bank the sample comes from.
+            suffix: The custom sample bank suffix, or ``None`` for none.
+            volume: The playback volume, from 0 to 100.
+            editor_auto_bank: Whether the editor may pick the bank itself.
+            use_beatmap_samples: Whether the beatmap's own samples are used.
+        """
+        self.Name = name
+        self.Bank = bank
+        self.Suffix = suffix
+        self.Volume = volume
+        self.EditorAutoBank = editor_auto_bank
+        self.UseBeatmapSamples = use_beatmap_samples
 
     @property
     def LookupNames(self) -> list[str]:
@@ -60,12 +80,13 @@ class HitSampleInfo:
         return names
 
     def With(
-        self,
-        Name: str | None = None,
-        Bank: str | None = None,
-        Suffix: str | None = None,
-        Volume: int | None = None,
-        EditorAutoBank: bool | None = None,
+            self,
+            Name: str | None = None,
+            Bank: str | None = None,
+            Suffix: str | None = None,
+            Volume: int | None = None,
+            EditorAutoBank: bool | None = None,
+            UseBeatmapSamples: bool | None = None
     ) -> HitSampleInfo:
         """Return a copy with the given fields replaced.
 
@@ -75,24 +96,138 @@ class HitSampleInfo:
             Suffix: The new suffix, or ``None`` to keep the current one.
             Volume: The new volume, or ``None`` to keep the current one.
             EditorAutoBank: The new auto-bank flag, or ``None`` to keep it.
+            UseBeatmapSamples: The new beatmap samples flags or ``None`` to keep it.
 
         Returns:
             The modified copy.
         """
-        return replace(
-            self,
-            Name=self.Name if Name is None else Name,
-            Bank=self.Bank if Bank is None else Bank,
-            Suffix=self.Suffix if Suffix is None else Suffix,
-            Volume=self.Volume if Volume is None else Volume,
-            EditorAutoBank=(
-                self.EditorAutoBank if EditorAutoBank is None else EditorAutoBank
-            ),
+        return HitSampleInfo(
+            Name if Name is not None else self.Name,
+            Bank if Bank is not None else self.Bank,
+            Suffix if Suffix is not None else self.Suffix,
+            Volume if Volume is not None else self.Volume,
+            EditorAutoBank if EditorAutoBank is not None else self.EditorAutoBank,
+            UseBeatmapSamples if UseBeatmapSamples is not None else self.UseBeatmapSamples
         )
 
 
-@dataclass(frozen=True, slots=True)
-class FileHitSampleInfo(HitSampleInfo):
+class LegacyHitSampleInfo(HitSampleInfo):
+    """A sample that remembers what the beatmap said about it.
+
+    Which of its fields the beatmap set and which it left open decides what a
+    sample control point is allowed to fill in later.
+    """
+
+    def __init__(
+            self,
+            name: str,
+            bank: str | None = None,
+            volume: int = 0,
+            editor_auto_bank: bool = False,
+            custom_sample_bank: int = 0,
+            is_layered: bool = False
+    ) -> None:
+        """Create a legacy sample, decoding the custom sample bank.
+
+        A custom bank of 2 or higher becomes the sample suffix; any custom
+        bank of 1 or higher implies the beatmap's own samples are in use.
+
+        Args:
+            name: The sample name, for example ``hitnormal``.
+            bank: The bank the beatmap set, or ``None`` if it left it open.
+            volume: The volume the beatmap set, or 0 if it left it open.
+            editor_auto_bank: Whether the editor may pick the bank itself.
+            custom_sample_bank: The legacy custom sample bank number.
+            is_layered: Whether this sample plays on top of others.
+        """
+        super().__init__(
+            name,
+            bank if bank is not None else DEFAULT_BANK,
+            f"{custom_sample_bank}" if custom_sample_bank >= 2 else None,
+            volume,
+            editor_auto_bank,
+            custom_sample_bank >= 1
+        )
+        self.BankSpecified = bank
+        self.IsLayered = is_layered
+
+    @property
+    def CustomSampleBank(self) -> int:
+        """Return the legacy custom sample bank number, 0 when unset."""
+        if self.Suffix is not None:
+            return int(self.Suffix)
+        return 1 if self.UseBeatmapSamples else 0
+
+    def WithCustomBank(
+            self,
+            Name: str | None = None,
+            Bank: str | None = None,
+            Volume: int | None = None,
+            EditorAutoBank: bool | None = None,
+            CustomSampleBank: int | None = None,
+            IsLayered: bool | None = None
+    ) -> LegacyHitSampleInfo:
+        """Return a copy with the given legacy fields replaced.
+
+        Args:
+            Name: The new sample name, or ``None`` to keep the current one.
+            Bank: The new bank, or ``None`` to keep the current one.
+            Volume: The new volume, or ``None`` to keep the current one.
+            EditorAutoBank: The new auto-bank flag, or ``None`` to keep it.
+            CustomSampleBank: The new custom sample bank, or ``None`` to keep it.
+            IsLayered: The new layered flag, or ``None`` to keep it.
+
+        Returns:
+            The modified copy.
+        """
+        return LegacyHitSampleInfo(
+            Name if Name is not None else self.Name,
+            Bank if Bank is not None else self.Bank,
+            Volume if Volume is not None else self.Volume,
+            EditorAutoBank if EditorAutoBank is not None else self.EditorAutoBank,
+            CustomSampleBank if CustomSampleBank is not None else self.CustomSampleBank,
+            IsLayered if IsLayered is not None else self.IsLayered
+        )
+
+    def With(
+            self,
+            Name: str | None = None,
+            Bank: str | None = None,
+            Suffix: str | None = None,
+            Volume: int | None = None,
+            EditorAutoBank: bool | None = None,
+            UseBeatmapSamples: bool | None = None
+    ) -> HitSampleInfo:
+        """Return a copy with the given fields replaced.
+
+        The suffix and the beatmap-samples flag fold back into the legacy
+        custom sample bank, which is what the returned copy stores.
+
+        Args:
+            Name: The new sample name, or ``None`` to keep the current one.
+            Bank: The new bank, or ``None`` to keep the current one.
+            Suffix: The new suffix, or ``None`` to keep the current one.
+            Volume: The new volume, or ``None`` to keep the current one.
+            EditorAutoBank: The new auto-bank flag, or ``None`` to keep it.
+            UseBeatmapSamples: The new beatmap-samples flag, or ``None`` to keep it.
+
+        Returns:
+            The modified copy.
+        """
+        suffix = Suffix if Suffix is not None else self.Suffix
+        use_beatmap_samples = UseBeatmapSamples if UseBeatmapSamples is not None else self.UseBeatmapSamples
+        new_custom_sample_bank = 0
+
+        if suffix is not None:
+            new_custom_sample_bank = Parsing.TryParseInt(suffix)
+
+        if new_custom_sample_bank == 0 and use_beatmap_samples:
+            new_custom_sample_bank = 1
+
+        return self.WithCustomBank(Name, Bank, Volume, EditorAutoBank, new_custom_sample_bank)
+
+
+class FileHitSampleInfo(LegacyHitSampleInfo):
     """A sample the beatmap names by file rather than by bank and sound.
 
     osu! still calls this a normal hit sound -- :attr:`Name` stays
@@ -102,13 +237,15 @@ class FileHitSampleInfo(HitSampleInfo):
     a converted note can fail to turn strong.
     """
 
-    Filename: str = ""
+    def __init__(self, filename: str, volume: int) -> None:
+        """Create a file-based hit sample info object.
 
-    # osu! forces a custom bank of one so that a beatmap's own skin cannot
-    # fall back to the user's sounds for a sample the beatmap named by file.
-    CustomSampleBank: int = 1
-    IsLayered: bool = False
-    BankSpecified: bool = True
+        Args:
+            filename: The audio filename associated with this sample.
+            volume: The playback volume, from 0 to 100.
+        """
+        LegacyHitSampleInfo.__init__(self, HIT_NORMAL, DEFAULT_BANK, custom_sample_bank=1, volume=volume)
+        self.Filename = filename
 
     @property
     def LookupNames(self) -> list[str]:
@@ -120,12 +257,13 @@ class FileHitSampleInfo(HitSampleInfo):
         return [self.Filename, stem, *HitSampleInfo.LookupNames.fget(self)]
 
     def With(
-        self,
-        Name: str | None = None,
-        Bank: str | None = None,
-        Suffix: str | None = None,
-        Volume: int | None = None,
-        EditorAutoBank: bool | None = None,
+            self,
+            Name: str | None = None,
+            Bank: str | None = None,
+            Suffix: str | None = None,
+            Volume: int | None = None,
+            EditorAutoBank: bool | None = None,
+            UseBeatmapSamples: bool | None = None
     ) -> FileHitSampleInfo:
         """Return a copy, keeping everything but the volume.
 
@@ -135,8 +273,9 @@ class FileHitSampleInfo(HitSampleInfo):
             Suffix: Ignored.
             Volume: The new volume, or ``None`` to keep the current one.
             EditorAutoBank: Ignored.
+            UseBeatmapSamples: Ignored.
 
         Returns:
             The copy.
         """
-        return replace(self, Volume=self.Volume if Volume is None else Volume)
+        return FileHitSampleInfo(self.Filename, Volume if Volume is not None else self.Volume)

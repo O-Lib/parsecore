@@ -24,8 +24,11 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
 from parsecore.Beatmaps.BeatmapProcessor import BeatmapProcessor
+from parsecore.Rulesets.Objects.Types.IHasComboInformation import IHasComboInformation
 from parsecore.Rulesets.Osu.Objects.HitCircle import HitCircle
+from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 from parsecore.Rulesets.Osu.Objects.Slider import Slider
 from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
 from parsecore.Utils.Vector2 import Vector2, f32
@@ -39,12 +42,28 @@ FIRST_MODERN_STACKING_VERSION = 6
 
 class OsuBeatmapProcessor(BeatmapProcessor):
     """Assigns stack heights to overlapping osu! objects."""
+    
+    def __init__(self, beatmap: Beatmap) -> None:
+        """Initialize the beatmap processor."""
+        super().__init__(beatmap)
+        
+    def PreProcess(self) -> None:
+        """Set up combo flags for hit objects prior to main processing."""
+        last_object: IHasComboInformation | None = None
+        
+        for hit_object in self.Beatmap.HitObjects:
+            if isinstance(hit_object, IHasComboInformation):
+                if not isinstance(hit_object, Spinner) and (last_object is None or isinstance(last_object, Spinner)):
+                    hit_object.NewCombo = True
+                last_object = hit_object
+                
+        super().PreProcess()
 
     def PostProcess(self) -> None:
         """Reset and recompute every object's stack height."""
         super().PostProcess()
 
-        hit_objects = self.Beatmap.HitObjects
+        hit_objects = [obj for obj in self.Beatmap.HitObjects if isinstance(obj, OsuHitObject)]
         if not hit_objects:
             return
 
@@ -52,11 +71,11 @@ class OsuBeatmapProcessor(BeatmapProcessor):
             hit_object.StackHeight = 0
 
         if self.Beatmap.BeatmapInfo.BeatmapVersion >= FIRST_MODERN_STACKING_VERSION:
-            self._apply_stacking(0, len(hit_objects) - 1)
+            self._apply_stacking(hit_objects, 0, len(hit_objects) - 1)
         else:
-            self._apply_stacking_old()
+            self._apply_stacking_old(hit_objects)
 
-    def _stack_threshold(self, hit_object) -> float:
+    def _stack_threshold(self, hit_object: OsuHitObject) -> float:
         """Return how far apart in time two objects may stack.
 
         osu! truncates the preempt time to a whole number and keeps the result
@@ -69,14 +88,13 @@ class OsuBeatmapProcessor(BeatmapProcessor):
             int(hit_object.TimePreempt) * self.Beatmap.BeatmapInfo.StackLeniency
         )
 
-    def _apply_stacking(self, start_index: int, end_index: int) -> None:
+    def _apply_stacking(self, hit_objects: list[OsuHitObject], start_index: int, end_index: int) -> None:
         """Stack objects the way osu! has since beatmap format v6.
 
         Args:
             start_index: The first object to consider.
             end_index: The last object to consider.
         """
-        hit_objects = self.Beatmap.HitObjects
 
         extended_end_index = end_index
 
@@ -179,9 +197,8 @@ class OsuBeatmapProcessor(BeatmapProcessor):
                         object_n.StackHeight = object_i.StackHeight + 1
                         object_i = object_n
 
-    def _apply_stacking_old(self) -> None:
+    def _apply_stacking_old(self, hit_objects: list[OsuHitObject]) -> None:
         """Stack objects the way osu! did before beatmap format v6."""
-        hit_objects = self.Beatmap.HitObjects
 
         for i, current_hit_object in enumerate(hit_objects):
             if current_hit_object.StackHeight != 0 and not isinstance(

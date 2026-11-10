@@ -31,4 +31,4 @@ from typing import Protocol, runtime_checkable
 class IHasXPosition(Protocol):
     """An object with an x position."""
 
-    x: float
+    X: float

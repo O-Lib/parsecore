@@ -24,12 +24,27 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from parsecore.Rulesets.Mods.ModAutopilot import ModAutopilot
+from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Mods.ModAutoplay import ModAutoplay
+from parsecore.Rulesets.Mods.ModRelax import ModRelax
+from parsecore.Rulesets.Mods.ModTouchDevice import ModTouchDevice
+from parsecore.Rulesets.Mods.ModType import ModType
 
 
-class OsuModAutopilot(ModAutopilot):
+class OsuModAutopilot(Mod):
     """Automatic cursor movement - just follow the rhythm."""
 
     Name = "Autopilot"
     Acronym = "AP"
     Description = "Automatic cursor movement - just follow the rhythm."
+    Type = ModType.Automation
+    ScoreMultiplier = 0.1
+
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Autopilot."""
+        from parsecore.Rulesets.Osu.Mods.OsuModMagnetised import OsuModMagnetised
+        from parsecore.Rulesets.Osu.Mods.OsuModSpunOut import OsuModSpunOut
+        return [
+        type(OsuModSpunOut), type(ModRelax), type(ModAutoplay), type(OsuModMagnetised), type(ModTouchDevice)
+    ]

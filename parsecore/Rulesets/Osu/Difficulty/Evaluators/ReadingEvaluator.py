@@ -25,14 +25,20 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
 from parsecore.Rulesets.Osu.Difficulty.Preprocessing.OsuDifficultyHitObject import (
     NORMALISED_DIAMETER,
     NORMALISED_RADIUS,
+    OsuDifficultyHitObject,
 )
 from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
 from parsecore.Utils.Interpolation import DoubleLerp
+from parsecore.Utils.Precision import Clamp
 
 READING_WINDOW_SIZE = 3000.0
 
@@ -40,7 +46,7 @@ READING_WINDOW_SIZE = 3000.0
 DISTANCE_INFLUENCE_THRESHOLD = NORMALISED_DIAMETER * 1.5
 
 
-def EvaluateDifficultyOf(current, hidden: bool) -> float:
+def EvaluateDifficultyOf(current: DifficultyHitObject, hidden: bool) -> float:
     """Return the reading difficulty of ``current``.
 
     Args:
@@ -53,8 +59,8 @@ def EvaluateDifficultyOf(current, hidden: bool) -> float:
     if isinstance(current.BaseObject, Spinner) or current.Index == 0:
         return 0.0
 
-    curr_obj = current
-    next_obj = current.Next()
+    curr_obj = cast(OsuDifficultyHitObject, current)
+    next_obj = cast(OsuDifficultyHitObject, current.Next())
 
     # Velocity may only add difficulty, never remove it.
     velocity = max(1.0, curr_obj.LazyJumpDistance / curr_obj.AdjustedDeltaTime)
@@ -98,7 +104,7 @@ def EvaluateDifficultyOf(current, hidden: bool) -> float:
 
 
 def _calculate_density_difficulty(
-    next_obj,
+    next_obj: OsuDifficultyHitObject | None,
     velocity: float,
     constant_angle_nerf_factor: float,
     past_object_difficulty_influence: float,
@@ -112,6 +118,9 @@ def _calculate_density_difficulty(
         constant_angle_nerf_factor: The penalty for repeated angles.
         past_object_difficulty_influence: How much the visible past adds.
         current_visible_object_density: How many objects are on screen.
+
+    Returns:
+        The calculated note density difficulty.
     """
     density_multiplier = 2.4
     density_difficulty_base = 2.5
@@ -149,6 +158,9 @@ def _calculate_preempt_difficulty(
         velocity: The cursor velocity onto the current object.
         constant_angle_nerf_factor: The penalty for repeated angles.
         preempt: How long the object is visible before it must be hit.
+
+    Returns:
+        The calculated preempt difficulty.
     """
     preempt_balancing_factor = 140000.0
     # 500 ms is approximately approach rate 9.66.
@@ -173,7 +185,7 @@ def _calculate_preempt_difficulty(
 
 
 def _calculate_hidden_difficulty(
-    curr_obj,
+    curr_obj: OsuDifficultyHitObject,
     past_object_difficulty_influence: float,
     current_visible_object_density: float,
     velocity: float,
@@ -187,6 +199,9 @@ def _calculate_hidden_difficulty(
         current_visible_object_density: How many objects are on screen.
         velocity: The cursor velocity onto the current object.
         constant_angle_nerf_factor: The penalty for repeated angles.
+
+    Returns:
+        The calculated hidden difficulty bonus.
     """
     hidden_multiplier = 0.28
 
@@ -209,13 +224,12 @@ def _calculate_hidden_difficulty(
     # A soft cap, because a player memorises part of what they read.
     hidden_difficulty = DiffUtils.Pow(hidden_difficulty, 0.4) * hidden_multiplier
 
-    previous_obj = curr_obj.Previous()
+    previous_obj = cast(OsuDifficultyHitObject, curr_obj.Previous())
 
     # A perfect stack only counts when the next note is fully invisible at the
     # moment the previous one is clicked.
     if (
-        previous_obj is not None
-        and curr_obj.LazyJumpDistance == 0
+        curr_obj.LazyJumpDistance == 0.0
         and curr_obj.OpacityAt(previous_obj.BaseObject.StartTime, True) == 0
         and previous_obj.StartTime > curr_obj.StartTime - curr_obj.Preempt
     ):
@@ -226,11 +240,14 @@ def _calculate_hidden_difficulty(
     return hidden_difficulty
 
 
-def _get_past_object_difficulty_influence(curr_obj) -> float:
+def _get_past_object_difficulty_influence(curr_obj: OsuDifficultyHitObject) -> float:
     """Return how much the objects still on screen add to reading.
 
     Args:
         curr_obj: The object being evaluated.
+
+    Returns:
+        The reading difficulty influence from past visible objects.
     """
     past_object_difficulty_influence = 0.0
 
@@ -240,7 +257,7 @@ def _get_past_object_difficulty_influence(curr_obj) -> float:
         # Objects a short distance apart can be cheesed, so how they were
         # arranged matters less.
         loop_difficulty *= DiffUtils.Smootherstep(
-            loop_obj.LazyJumpDistance, 15, DISTANCE_INFLUENCE_THRESHOLD
+            loop_obj.LazyJumpDistance, 15.0, DISTANCE_INFLUENCE_THRESHOLD
         )
 
         time_between = curr_obj.StartTime - loop_obj.StartTime
@@ -251,16 +268,19 @@ def _get_past_object_difficulty_influence(curr_obj) -> float:
     return past_object_difficulty_influence
 
 
-def _retrieve_past_visible_objects(current) -> list:
+def _retrieve_past_visible_objects(current: OsuDifficultyHitObject) -> list[OsuDifficultyHitObject]:
     """Return the objects already on screen when ``current`` appears.
 
     Args:
         current: The object being evaluated.
+
+    Returns:
+        A list of past hit objects that are still visible on screen.
     """
     result = []
 
     for i in range(current.Index):
-        hit_object = current.Previous(i)
+        hit_object = cast(OsuDifficultyHitObject, current.Previous(i))
         if (
             hit_object is None
             or current.StartTime - hit_object.StartTime > READING_WINDOW_SIZE
@@ -273,15 +293,18 @@ def _retrieve_past_visible_objects(current) -> list:
     return result
 
 
-def _retrieve_current_visible_object_density(current) -> float:
+def _retrieve_current_visible_object_density(current: OsuDifficultyHitObject) -> float:
     """Return how many objects are on screen when ``current`` must be clicked.
 
     Args:
         current: The object being evaluated.
+
+    Returns:
+        The density value of currently visible objects.
     """
     visible_object_count = 0.0
 
-    hit_object = current.Next()
+    hit_object = cast(OsuDifficultyHitObject, current.Next())
     while hit_object is not None:
         if (
             hit_object.StartTime - current.StartTime > READING_WINDOW_SIZE
@@ -296,12 +319,12 @@ def _retrieve_current_visible_object_density(current) -> float:
             * _get_time_nerf_factor(time_between)
         )
 
-        hit_object = hit_object.Next()
+        hit_object = cast(OsuDifficultyHitObject | None, hit_object.Next())
 
     return visible_object_count
 
 
-def _get_constant_angle_nerf_factor(current) -> float:
+def _get_constant_angle_nerf_factor(current: OsuDifficultyHitObject) -> float:
     """Return a penalty for how often the current angle has already appeared.
 
     Args:
@@ -318,11 +341,11 @@ def _get_constant_angle_nerf_factor(current) -> float:
     current_time_gap = 0.0
 
     loop_obj_prev0 = current
-    loop_obj_prev1 = None
-    loop_obj_prev2 = None
+    loop_obj_prev1: OsuDifficultyHitObject | None = None
+    loop_obj_prev2: OsuDifficultyHitObject | None = None
 
     while current_time_gap < minimum_angle_relevancy_time:
-        loop_obj = current.Previous(index)
+        loop_obj = cast(OsuDifficultyHitObject, current.Previous(index))
         if loop_obj is None:
             break
 
@@ -392,7 +415,7 @@ def _get_constant_angle_nerf_factor(current) -> float:
         # No comparable angles found, so nothing is repeated.
         return 1.0
 
-    return min(max(2 / constant_angle_count, 0.2), 1.0)
+    return Clamp(2 / constant_angle_count, 0.2, 1.0)
 
 
 def _get_time_nerf_factor(delta_time: float) -> float:
@@ -400,6 +423,9 @@ def _get_time_nerf_factor(delta_time: float) -> float:
 
     Args:
         delta_time: The time between the two objects.
+
+    Returns:
+        The time nerf factor value between 0.0 and 1.0.
     """
     return min(max(2 - delta_time / (READING_WINDOW_SIZE / 2), 0.0), 1.0)
 
@@ -409,5 +435,8 @@ def _high_bpm_bonus(ms: float) -> float:
 
     Args:
         ms: The time available, in milliseconds.
+
+    Returns:
+        The high BPM reading bonus multiplier.
     """
     return 1 / (1 - DiffUtils.Pow(0.8, ms / 1000))

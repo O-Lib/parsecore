@@ -24,14 +24,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from parsecore.Rulesets.Mods.Mod import Mod
-from parsecore.Rulesets.Mods.ModType import ModType
+from parsecore.Rulesets.Mods.ModNightcore import ModNightcore
 
 
-class ModMagnetised(Mod):
-    """No need to chase the circles - your cursor is a magnet!"""
-
-    Name = "Magnetised"
-    Acronym = "MG"
-    Description = "No need to chase the circles - your cursor is a magnet!"
-    Type = ModType.Fun
+class CatchModNightcore(ModNightcore):
+    """The Catch mode variation of the Nightcore modifier."""

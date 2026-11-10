@@ -26,12 +26,14 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from parsecore.Beatmaps.BeatmapProcessor import BeatmapProcessor
+
 
 @runtime_checkable
 class IApplicableToBeatmapProcessor(Protocol):
     """A mod that configures the beatmap processor."""
 
-    def ApplyToBeatmapProcessor(self, processor) -> None:
+    def ApplyToBeatmapProcessor(self, processor: BeatmapProcessor) -> None:
         """Configure the processor before it runs.
 
         Args:

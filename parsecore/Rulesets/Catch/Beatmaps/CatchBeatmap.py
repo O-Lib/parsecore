@@ -31,6 +31,7 @@ from parsecore.Rulesets.Catch.Objects.JuiceStream import JuiceStream
 from parsecore.Rulesets.Catch.Objects.PalpableCatchHitObject import (
     PalpableCatchHitObject,
 )
+from parsecore.Rulesets.Objects.HitObject import HitObject
 
 
 class CatchBeatmap(Beatmap):
@@ -52,7 +53,7 @@ class CatchBeatmap(Beatmap):
         return sum(1 for h in self.HitObjects if isinstance(h, BananaShower))
 
 
-def GetPalpableObjects(hit_objects: list) -> list:
+def GetPalpableObjects(hit_objects: list[HitObject]) -> list[PalpableCatchHitObject]:
     """Return everything the plate can catch, in time order.
 
     A juice stream or banana shower contributes only what it drops; a loose
@@ -64,7 +65,7 @@ def GetPalpableObjects(hit_objects: list) -> list:
     Returns:
         The catchable objects, sorted by when they land.
     """
-    palpable: list = []
+    palpable: list[PalpableCatchHitObject] = []
 
     for hit_object in hit_objects:
         if isinstance(hit_object, PalpableCatchHitObject):

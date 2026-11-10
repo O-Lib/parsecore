@@ -60,9 +60,11 @@ def convert(objects: str, cs: float = 4.0, mods=None):
         mods: The mods to convert under.
     """
     decoded = decode(objects, cs)
-    return WorkingBeatmap(decoded).GetPlayableBeatmap(
-        CatchBeatmapConverter, CatchBeatmapProcessor, mods or []
-    )
+    if mods:
+        return WorkingBeatmap(decoded).GetPlayableBeatmap(
+            CatchBeatmapConverter, CatchBeatmapProcessor, mods
+        )
+    return WorkingBeatmap(decoded)
 
 
 def fruits_at(*positions: float, gap: float = 500.0) -> str:

@@ -24,6 +24,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
 from parsecore.Rulesets.Mods.ModHardRock import ADJUST_RATIO, ModHardRock
 
 # How much faster the playfield scrolls.
@@ -33,7 +34,7 @@ SLIDER_MULTIPLIER = 1.4 * 4 / 3
 class TaikoModHardRock(ModHardRock):
     """Everything just got a bit harder..."""
 
-    def ApplyToDifficulty(self, difficulty) -> None:
+    def ApplyToDifficulty(self, difficulty: BeatmapDifficulty) -> None:
         """Tighten the accuracy window and speed the playfield up.
 
         Args:

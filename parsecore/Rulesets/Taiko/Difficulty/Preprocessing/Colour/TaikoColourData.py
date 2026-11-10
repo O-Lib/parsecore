@@ -24,25 +24,42 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.AlternatingMonoPattern import (
+    AlternatingMonoPattern,
+)
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.MonoStreak import (
+    MonoStreak,
+)
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.RepeatingHitPatterns import (
+    RepeatingHitPatterns,
+)
+
+if TYPE_CHECKING:
+    from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+        TaikoDifficultyHitObject,
+    )
+
+
+@dataclass(slots=True)
 class TaikoColourData:
     """The colour groupings one note belongs to."""
 
-    def __init__(self) -> None:
-        """Create colour data with nothing assigned yet."""
-        self.MonoStreak = None
-        self.AlternatingMonoPattern = None
-        self.RepeatingHitPattern = None
+    MonoStreak: MonoStreak | None = None
+    AlternatingMonoPattern: AlternatingMonoPattern | None = None
+    RepeatingHitPattern: RepeatingHitPatterns | None = None
 
     @property
-    def PreviousColourChange(self):
+    def PreviousColourChange(self) -> TaikoDifficultyHitObject | None:
         """Return the note before this one's streak, whatever colour it was."""
         if self.MonoStreak is None:
             return None
         return self.MonoStreak.FirstHitObject.PreviousNote(0)
 
     @property
-    def NextColourChange(self):
+    def NextColourChange(self) -> TaikoDifficultyHitObject | None:
         """Return the note after this one's streak, whatever colour it is."""
         if self.MonoStreak is None:
             return None

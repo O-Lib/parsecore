@@ -24,6 +24,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
 from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
     CalculateScaleFromCircleSize,
 )
@@ -42,7 +43,7 @@ BASE_DASH_SPEED = 1.0
 BASE_WALK_SPEED = 0.5
 
 
-def CalculateScale(difficulty) -> float:
+def CalculateScale(difficulty: BeatmapDifficulty) -> float:
     """Return how large the plate is drawn.
 
     The plate is drawn at twice the scale a circle would be, so this is not the
@@ -54,7 +55,7 @@ def CalculateScale(difficulty) -> float:
     return f32(CalculateScaleFromCircleSize(difficulty.CircleSize) * 2)
 
 
-def CalculateCatchWidth(difficulty) -> float:
+def CalculateCatchWidth(difficulty: BeatmapDifficulty) -> float:
     """Return how wide a stretch of playfield the plate catches.
 
     Args:

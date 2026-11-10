@@ -25,15 +25,22 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
 from parsecore.Rulesets.Osu.Difficulty.Evaluators.Aim import SnapAimEvaluator
 from parsecore.Rulesets.Osu.Difficulty.Preprocessing.OsuDifficultyHitObject import (
     NORMALISED_DIAMETER,
     NORMALISED_RADIUS,
+    OsuDifficultyHitObject,
 )
+from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 from parsecore.Rulesets.Osu.Objects.Slider import Slider
 from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
+from parsecore.Utils.Precision import Clamp
 
 VELOCITY_CHANGE_MULTIPLIER = 0.52
 
@@ -41,7 +48,7 @@ VELOCITY_CHANGE_MULTIPLIER = 0.52
 FLOW_DIFFICULTY_EXPONENT = 1.45
 
 
-def EvaluateDifficultyOf(current, with_slider_travel_distance: bool) -> float:
+def EvaluateDifficultyOf(current: DifficultyHitObject, with_slider_travel_distance: bool) -> float:
     """Return the flow-aim difficulty of moving onto ``current``.
 
     Args:
@@ -51,8 +58,8 @@ def EvaluateDifficultyOf(current, with_slider_travel_distance: bool) -> float:
     Returns:
         The flow difficulty of this object.
     """
-    osu_curr_obj = current
-    osu_last_obj = current.Previous()
+    osu_curr_obj = cast(OsuDifficultyHitObject, current)
+    osu_last_obj = cast(OsuDifficultyHitObject, current.Previous())
 
     if (
         isinstance(current.BaseObject, Spinner)
@@ -61,7 +68,7 @@ def EvaluateDifficultyOf(current, with_slider_travel_distance: bool) -> float:
     ):
         return 0.0
 
-    osu_last_last_obj = current.Previous(1)
+    osu_last_last_obj = cast(OsuDifficultyHitObject, current.Previous(1))
 
     curr_distance = (
         osu_curr_obj.LazyJumpDistance
@@ -141,10 +148,11 @@ def EvaluateDifficultyOf(current, with_slider_travel_distance: bool) -> float:
             1,
         )
 
+        min_adjusted_delta_time = float(
+            min(osu_curr_obj.AdjustedDeltaTime, osu_last_obj.AdjustedDeltaTime)
+        )
         overlap_velocity_buff = min(
-            NORMALISED_DIAMETER
-            * 1.25
-            / min(osu_curr_obj.AdjustedDeltaTime, osu_last_obj.AdjustedDeltaTime),
+            NORMALISED_DIAMETER * 1.25 / min_adjusted_delta_time,
             abs(prev_velocity - curr_velocity),
         )
 
@@ -161,29 +169,37 @@ def EvaluateDifficultyOf(current, with_slider_travel_distance: bool) -> float:
 
     flow_difficulty = DiffUtils.Pow(flow_difficulty, FLOW_DIFFICULTY_EXPONENT)
 
+    a = flow_difficulty * DiffUtils.Smootherstep(
+        curr_distance, 0, NORMALISED_RADIUS
+    )
+
     # Spacing below one radius is always flowed, so it earns less.
     return flow_difficulty * DiffUtils.Smootherstep(
         curr_distance, 0, NORMALISED_RADIUS
     )
 
 
-def _calculate_overlap_factor(first, second) -> float:
+def _calculate_overlap_factor(first: OsuDifficultyHitObject, second: OsuDifficultyHitObject) -> float:
     """Return how much two objects overlap, from ``0`` to ``1``.
 
     Args:
         first: The first object.
         second: The second object.
+
+    Returns:
+        The overlap factor value between 0.0 and 1.0.
     """
-    first_base = first.BaseObject
-    second_base = second.BaseObject
+    first_base = cast(OsuHitObject, first.BaseObject)
+    second_base = cast(OsuHitObject, second.BaseObject)
 
     object_radius = first_base.Radius
     distance = (first_base.StackedPosition - second_base.StackedPosition).length()
 
-    return min(
-        max(
-            1 - DiffUtils.Pow(max(distance - object_radius, 0) / object_radius, 2),
-            0.0,
+    return Clamp(
+        1 - DiffUtils.Pow(
+            max(distance - object_radius, 0) / object_radius,
+            2
         ),
-        1.0,
+        0,
+        1
     )

@@ -24,8 +24,11 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from parsecore.Rulesets.Objects.PathControlPoint import PathControlPoint
 from parsecore.Rulesets.Objects.SliderPath import SliderPath
+from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 from parsecore.Rulesets.Osu.Objects.Slider import Slider
 from parsecore.Utils.Vector2 import Vector2
 
@@ -33,7 +36,7 @@ from parsecore.Utils.Vector2 import Vector2
 PLAYFIELD_SIZE = Vector2(512, 384)
 
 
-def ReflectVerticallyAlongPlayfield(osu_object) -> None:
+def ReflectVerticallyAlongPlayfield(osu_object: OsuHitObject) -> None:
     """Mirror an object across the playfield's horizontal centre line.
 
     A slider is mirrored by negating the Y of every control point, which keeps
@@ -49,15 +52,16 @@ def ReflectVerticallyAlongPlayfield(osu_object) -> None:
     if not isinstance(osu_object, Slider):
         return
 
+    def reflect_control_point(point: PathControlPoint) -> None:
+        point.Position = Vector2(point.Position.X, -point.Position.Y)
+
     _modify_slider(
         osu_object,
-        lambda point: PathControlPoint(
-            Vector2(point.Position.X, -point.Position.Y), point.Type
-        ),
+        reflect_control_point
     )
 
 
-def ReflectHorizontallyAlongPlayfield(osu_object) -> None:
+def ReflectHorizontallyAlongPlayfield(osu_object: OsuHitObject) -> None:
     """Mirror an object across the playfield's vertical centre line.
 
     Args:
@@ -70,15 +74,16 @@ def ReflectHorizontallyAlongPlayfield(osu_object) -> None:
     if not isinstance(osu_object, Slider):
         return
 
+    def reflect_control_point(point: PathControlPoint) -> None:
+        point.Position = Vector2(-point.Position.X, point.Position.Y)
+
     _modify_slider(
         osu_object,
-        lambda point: PathControlPoint(
-            Vector2(-point.Position.X, point.Position.Y), point.Type
-        ),
+        reflect_control_point,
     )
 
 
-def _modify_slider(slider, modify_control_point) -> None:
+def _modify_slider(slider: Slider, modify_control_point: Callable[[PathControlPoint], None]) -> None:
     """Rebuild a slider's path with every control point transformed.
 
     osu! assigns a whole new path rather than editing the existing one, which
@@ -89,8 +94,10 @@ def _modify_slider(slider, modify_control_point) -> None:
         modify_control_point: Returns the replacement for a control point.
     """
     control_points = [
-        modify_control_point(PathControlPoint(point.Position, point.Type))
+        PathControlPoint(point.Position, point.Type)
         for point in slider.Path.ControlPoints
     ]
+    for point in control_points:
+        modify_control_point(point)
 
     slider.Path = SliderPath(control_points, slider.Path.ExpectedDistance)

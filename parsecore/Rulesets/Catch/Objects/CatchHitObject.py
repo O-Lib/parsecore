@@ -25,13 +25,18 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
 from parsecore.Rulesets.Catch.UI.CatchPlayfield import WIDTH as PLAYFIELD_WIDTH
 from parsecore.Rulesets.Objects.HitObject import HitObject
 from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
     CalculateScaleFromCircleSize,
 )
+from parsecore.Rulesets.Objects.Types.IHasComboInformation import IHasComboInformation
+from parsecore.Rulesets.Objects.Types.IHasPosition import IHasPosition
+from parsecore.Rulesets.Objects.Types.IHasTimePreempt import IHasTimePreempt
 from parsecore.Rulesets.Scoring.EmptyHitWindows import EmptyHitWindows
-from parsecore.Utils.Vector2 import f32
+from parsecore.Utils.Precision import Clamp
+from parsecore.Utils.Vector2 import Vector2, f32
 
 OBJECT_RADIUS = 64.0
 
@@ -46,36 +51,32 @@ PREEMPT_MID = 1200.0
 PREEMPT_MIN = 450.0
 
 
-class CatchHitObject(HitObject):
+class CatchHitObject(HitObject, IHasPosition, IHasComboInformation, IHasTimePreempt):
     """Something falling towards the plate."""
 
-    def __init__(self, start_time: float = 0.0, x: float = 0.0) -> None:
-        """Create a catch object.
-
-        Args:
-            start_time: The object's time in milliseconds.
-            x: Where the beatmap places it across the playfield.
-        """
-        super().__init__(start_time)
-        self.OriginalX = x
-        self.XOffset = 0.0
+    def __init__(self) -> None:
+        """Create a catch object."""
+        super().__init__()
+        self._original_x: float = f32(0.0)
+        self._scale: float = f32(1.0)
+        self.xOffset = 0.0
         self.LegacyConvertedY: float = DEFAULT_LEGACY_CONVERT_Y
 
         self.TimePreempt: float = 1000.0
         self.Scale: float = 1.0
 
-        self.IndexInBeatmap: int = 0
+        self.indexInBeatmap: int = 0
         self.NewCombo: bool = False
         self.ComboOffset: int = 0
         self.IndexInCurrentCombo: int = 0
         self.ComboIndex: int = 0
         self.ComboIndexWithOffsets: int = 0
-        self._last_in_combo: bool = False
+        self.LastInCombo: bool = False
 
     @property
     def OriginalX(self) -> float:
         """Return where the beatmap places this object."""
-        return self._original_x
+        return f32(self._original_x)
 
     @OriginalX.setter
     def OriginalX(self, value: float) -> None:
@@ -89,7 +90,7 @@ class CatchHitObject(HitObject):
     @property
     def XOffset(self) -> float:
         """Return how far the processor has nudged this object."""
-        return self._x_offset
+        return f32(self.xOffset)
 
     @XOffset.setter
     def XOffset(self, value: float) -> None:
@@ -98,7 +99,7 @@ class CatchHitObject(HitObject):
         Args:
             value: The new offset.
         """
-        self._x_offset = f32(value)
+        self.xOffset = f32(value)
 
     @property
     def Scale(self) -> float:
@@ -129,30 +130,44 @@ class CatchHitObject(HitObject):
         self.OriginalX = value
 
     @property
-    def EffectiveX(self) -> float:
-        """Return where the object actually falls, offset and all."""
-        return min(max(f32(self.OriginalX + self.XOffset), 0.0), PLAYFIELD_WIDTH)
+    def Y(self) -> float:
+        """Return the legacy vertical position of the object."""
+        return self.LegacyConvertedY
+
+    @Y.setter
+    def Y(self, value: float) -> None:
+        self.LegacyConvertedY = value
 
     @property
-    def LastInCombo(self) -> bool:
-        """Return whether this object closes its combo."""
-        return self._last_in_combo
+    def Position(self) -> Vector2:
+        """Return the 2D position vector of the object."""
+        return Vector2(self.OriginalX, self.LegacyConvertedY)
 
-    @LastInCombo.setter
-    def LastInCombo(self, value: bool) -> None:
-        """Set whether this object closes its combo.
+    @Position.setter
+    def Position(self, value: Vector2) -> None:
+        self.X = value.X
+        self.Y = value.Y
 
-        Args:
-            value: Whether it does.
-        """
-        self._last_in_combo = value
+    @property
+    def EffectiveX(self) -> float:
+        """Return where the object actually falls, offset and all."""
+        return f32(Clamp(self.OriginalX + self.XOffset, 0.0, PLAYFIELD_WIDTH))
+
+    @property
+    def IndexInBeatmap(self) -> int:
+        """Return the zero-based index of this object within the beatmap."""
+        return self.indexInBeatmap
+
+    @IndexInBeatmap.setter
+    def IndexInBeatmap(self, value: int):
+        self.indexInBeatmap = value
 
     @property
     def RandomSeed(self) -> int:
         """Return the seed osu!stable derived from this object's time."""
         return int(self.StartTime)
 
-    def ApplyDefaultsToSelf(self, control_point_info, difficulty) -> None:
+    def ApplyDefaultsToSelf(self, control_point_info: ControlPointInfo, difficulty: BeatmapDifficulty) -> None:
         """Derive the object's visibility and size from the beatmap.
 
         Args:
@@ -168,7 +183,7 @@ class CatchHitObject(HitObject):
         )
         self.Scale = CalculateScaleFromCircleSize(difficulty.CircleSize)
 
-    def UpdateComboInformation(self, last_object) -> None:
+    def UpdateComboInformation(self, last_object: IHasComboInformation | None) -> None:
         """Place this object in the beatmap's run of combos.
 
         A banana shower never starts a combo of its own, and the object after
@@ -177,13 +192,11 @@ class CatchHitObject(HitObject):
         Args:
             last_object: The object before this one, if any.
         """
-        from parsecore.Rulesets.Catch.Objects.BananaShower import BananaShower
+        from parsecore.Rulesets.Catch.Objects.Banana import BananaShower
 
         index = last_object.ComboIndex if last_object else 0
         index_with_offsets = last_object.ComboIndexWithOffsets if last_object else 0
-        in_current_combo = (
-            last_object.IndexInCurrentCombo + 1 if last_object else 0
-        )
+        in_current_combo = last_object.IndexInCurrentCombo + 1 if last_object else 0
 
         if not isinstance(self, BananaShower) and (
             self.NewCombo or last_object is None or isinstance(last_object, BananaShower)

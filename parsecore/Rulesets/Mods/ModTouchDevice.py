@@ -24,15 +24,15 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Rulesets.Mods.IApplicableMod import IApplicableMod
 from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Mods.ModType import ModType
 
 
-class ModTouchDevice(Mod):
+class ModTouchDevice(Mod, IApplicableMod):
     """Automatically applied to plays on devices with a touchscreen."""
 
     Name = "Touch Device"
     Acronym = "TD"
     Description = "Automatically applied to plays on devices with a touchscreen."
     Type = ModType.System
-    ScoreMultiplier = 1.0

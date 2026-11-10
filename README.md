@@ -1,4 +1,4 @@
-<div align="center">
+from parsecore.Rulesets.Osu.Mods.OsuModDoubleTime import OsuModDoubleTime<div align="center">
 
 ![ParseCore](https://i.imgur.com/35asYBQ.jpeg)
 
@@ -123,9 +123,6 @@ for hit_object in beatmap.HitObjects[:5]:
 ```python
 from parsecore.Beatmaps.Formats.LegacyBeatmapDecoder import LegacyBeatmapDecoder
 from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
-from parsecore.Rulesets.Mods.ModDoubleTime import ModDoubleTime
-from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapConverter import OsuBeatmapConverter
-from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapProcessor import OsuBeatmapProcessor
 from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyCalculator import (
     OsuDifficultyCalculator,
 )
@@ -133,23 +130,22 @@ from parsecore.Rulesets.Osu.Difficulty.OsuPerformanceCalculator import (
     OsuPerformanceCalculator,
 )
 from parsecore.Rulesets.Osu.Mods.OsuModHidden import OsuModHidden
+from parsecore.Rulesets.Osu.Mods.OsuModDoubleTime import OsuModDoubleTime
 from parsecore.Rulesets.Scoring.HitResult import HitResult
 from parsecore.Scoring.ScoreInfo import ScoreInfo
 
 decoded = LegacyBeatmapDecoder.FromPath("map.osu")
-mods = [OsuModHidden(), ModDoubleTime()]
+mods = [OsuModHidden(), OsuModDoubleTime()]
 
-playable = WorkingBeatmap(decoded).GetPlayableBeatmap(
-    OsuBeatmapConverter, OsuBeatmapProcessor, mods
-)
-attributes = OsuDifficultyCalculator(playable, decoded).Calculate(mods)
+working_beatmap = WorkingBeatmap(decoded)
+attributes = OsuDifficultyCalculator(working_beatmap).Calculate(mods)
 
 print(attributes.StarRating) # 10.201730601358229
 print(attributes.MaxCombo) # 703
 
 score = ScoreInfo(
     Mods=mods,
-    BeatmapDifficulty=decoded.Difficulty,
+    BeatmapInfo=decoded.BeatmapInfo,
     MaxCombo=attributes.MaxCombo,
     Accuracy=1.0,
     Statistics={
@@ -177,12 +173,15 @@ from parsecore.Rulesets.Mania.Difficulty.ManiaDifficultyCalculator import (
 from parsecore.Rulesets.Mania.Mods.ManiaKeyMod import ManiaModKey4
 
 mods = [ManiaModKey4()]
-playable = WorkingBeatmap(decoded).GetPlayableBeatmap(
+working_beatmap = WorkingBeatmap(decoded)
+playable = working_beatmap.GetPlayableBeatmap(
     ManiaBeatmapConverter, None, mods
 )
 
+attributes = ManiaDifficultyCalculator(working_beatmap).Calculate(mods)
+
 print(playable.TotalColumns) # 4
-print(ManiaDifficultyCalculator(playable).Calculate(mods).StarRating)
+print(attributes.StarRating)
 ```
 
 ### Writing a beatmap back out
@@ -207,7 +206,7 @@ from parsecore.Rulesets.Osu.Mods.OsuModClassic import OsuModClassic
 
 score = ScoreInfo(
     Mods=[OsuModClassic()],
-    BeatmapDifficulty=decoded.Difficulty,
+    BeatmapInfo=decoded.BeatmapInfo,
     MaxCombo=219,
     Accuracy=0.9948453608247423,
     LegacyTotalScore=884865,

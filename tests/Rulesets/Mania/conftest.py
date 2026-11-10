@@ -77,8 +77,11 @@ def convert(decoded, mods=None):
         decoded: The decoded beatmap.
         mods: The mods to convert under.
     """
+    if mods is None:
+        return WorkingBeatmap(decoded)
+
     return WorkingBeatmap(decoded).GetPlayableBeatmap(
-        ManiaBeatmapConverter, None, mods or []
+        ManiaBeatmapConverter, None, mods
     )
 
 

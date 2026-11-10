@@ -23,6 +23,7 @@ SOFTWARE.
 """
 
 import math
+from typing import cast
 
 import pytest
 
@@ -30,8 +31,9 @@ from parsecore.Beatmaps.Formats.LegacyBeatmapDecoder import LegacyBeatmapDecoder
 from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
 from parsecore.Rulesets.Mods.ModDoubleTime import ModDoubleTime
-from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapConverter import OsuBeatmapConverter
-from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapProcessor import OsuBeatmapProcessor
+from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyAttributes import (
+    OsuDifficultyAttributes,
+)
 from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyCalculator import (
     OsuDifficultyCalculator,
     SumCognitionDifficulty,
@@ -42,10 +44,8 @@ from parsecore.Rulesets.Osu.Mods.OsuModFlashlight import OsuModFlashlight
 def _attributes(path, mods=None):
     """Return the difficulty attributes of a beatmap file."""
     decoded = LegacyBeatmapDecoder.FromPath(str(path))
-    playable = WorkingBeatmap(decoded).GetPlayableBeatmap(
-        OsuBeatmapConverter, OsuBeatmapProcessor, mods
-    )
-    return OsuDifficultyCalculator(playable).Calculate(mods or [])
+    working = WorkingBeatmap(decoded)
+    return OsuDifficultyCalculator(working).Calculate(mods or [])
 
 
 def _osu_files(beatmap_files):
@@ -93,7 +93,7 @@ def test_every_osu_beatmap_gets_a_plausible_star_rating(beatmap_files):
 def test_star_rating_components_are_populated(beatmap_files):
     """The attributes carry a breakdown, not just a total."""
     path = _osu_files(beatmap_files)[0]
-    attributes = _attributes(path)
+    attributes = cast(OsuDifficultyAttributes, _attributes(path))
 
     assert attributes.AimDifficulty > 0
     assert attributes.SpeedDifficulty > 0
@@ -105,8 +105,8 @@ def test_flashlight_only_counts_with_the_mod(beatmap_files):
     """Flashlight difficulty stays zero unless the mod is applied."""
     path = _osu_files(beatmap_files)[0]
 
-    assert _attributes(path).FlashlightDifficulty == 0.0
-    assert _attributes(path, [OsuModFlashlight()]).FlashlightDifficulty > 0
+    assert cast(OsuDifficultyAttributes, _attributes(path)).FlashlightDifficulty is None
+    assert cast(OsuDifficultyAttributes, _attributes(path, [OsuModFlashlight()])).FlashlightDifficulty > 0
 
 
 def test_rate_increasing_mods_raise_the_star_rating(beatmap_files):
@@ -129,7 +129,5 @@ def test_empty_beatmap_has_no_difficulty():
     decoded = LegacyBeatmapDecoder.FromText(
         "osu file format v14\n[General]\nMode: 0\n[HitObjects]\n"
     )
-    playable = WorkingBeatmap(decoded).GetPlayableBeatmap(
-        OsuBeatmapConverter, OsuBeatmapProcessor
-    )
+    playable = WorkingBeatmap(decoded)
     assert OsuDifficultyCalculator(playable).Calculate([]).StarRating == 0.0

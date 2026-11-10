@@ -75,11 +75,11 @@ def test_clock_rate_scales_times():
 def test_denser_rhythm_is_harder_over_the_same_span():
     """Over one span of time, more closely spaced objects build more strain."""
     span = 4000
-    dense = ConstantStrainSkill()
+    dense = ConstantStrainSkill([])
     for obj in _make_objects(list(range(0, span, 100))):
         dense.Process(obj)
 
-    sparse = ConstantStrainSkill()
+    sparse = ConstantStrainSkill([])
     for obj in _make_objects(list(range(0, span, 500))):
         sparse.Process(obj)
 
@@ -92,11 +92,11 @@ def test_difficulty_is_summed_over_sections():
     Sections are the unit of a strain skill, so the same rhythm played for
     longer is worth more -- this is what makes star rating length-dependent.
     """
-    short = ConstantStrainSkill()
+    short = ConstantStrainSkill([])
     for obj in _make_objects(list(range(0, 2000, 100))):
         short.Process(obj)
 
-    long = ConstantStrainSkill()
+    long = ConstantStrainSkill([])
     for obj in _make_objects(list(range(0, 8000, 100))):
         long.Process(obj)
 
@@ -105,4 +105,4 @@ def test_difficulty_is_summed_over_sections():
 
 def test_no_objects_gives_no_difficulty():
     """A skill that saw nothing reports zero difficulty."""
-    assert ConstantStrainSkill().DifficultyValue() == 0.0
+    assert ConstantStrainSkill([]).DifficultyValue() == 0.0

@@ -24,26 +24,35 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
+from typing import TYPE_CHECKING
+
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
+from parsecore.Rulesets.Osu.Objects.HitCircle import HitCircle
+
+if TYPE_CHECKING:
+    from parsecore.Rulesets.Osu.Objects.Slider import Slider
 
 
-class SliderEndCircle(OsuHitObject):
+class SliderEndCircle(HitCircle):
     """A circle marking the end of one span of a slider."""
 
-    def __init__(self, slider=None, start_time: float = 0.0, position=None) -> None:
+    def __init__(self, slider: Slider) -> None:
         """Create a slider end circle.
 
         Args:
             slider: The slider this circle belongs to.
-            start_time: The circle's time in milliseconds.
-            position: The circle's position.
         """
-        super().__init__(start_time, position)
+        super().__init__()
         self.Slider = slider
-        self.SpanIndex: int = 0
-        self.SpanStartTime: float = 0.0
+        self.RepeatIndex: int = 0
 
-    def ApplyDefaultsToSelf(self, control_point_info, difficulty) -> None:
+    @property
+    def SpanDuration(self) -> float:
+        """Return the duration of a single span of the slider."""
+        return self.Slider.SpanDuration
+
+    def ApplyDefaultsToSelf(self, control_point_info: ControlPointInfo, difficulty: BeatmapDifficulty) -> None:
         """Give the circle the preempt time of its span.
 
         Args:
@@ -52,11 +61,19 @@ class SliderEndCircle(OsuHitObject):
         """
         super().ApplyDefaultsToSelf(control_point_info, difficulty)
 
-        if self.SpanIndex > 0:
-            self.TimePreempt = self.StartTime - self.SpanStartTime + 200.0
+        if self.RepeatIndex > 0:
+            self.TimeFadeIn = 0.0
+            self.TimePreempt = self.SpanDuration * 2
+        else:
+            self.TimePreempt += self.StartTime - self.Slider.StartTime
 
     def CreateJudgement(self):
         """Return the judgement this object is scored with."""
         from parsecore.Rulesets.Osu.Judgements.OsuJudgement import SliderEndJudgement
 
         return SliderEndJudgement()
+
+    def CreateHitWindows(self):
+        """Return empty hit windows as slider end circles use custom timing."""
+        from parsecore.Rulesets.Scoring.EmptyHitWindows import EmptyHitWindows
+        return EmptyHitWindows()

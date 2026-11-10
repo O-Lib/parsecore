@@ -35,4 +35,3 @@ class ModNoMod(Mod):
     Acronym = "NM"
     Description = "No mods applied."
     Type = ModType.System
-    ScoreMultiplier = 1.0

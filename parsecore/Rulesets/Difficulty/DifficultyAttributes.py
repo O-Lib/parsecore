@@ -26,11 +26,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from parsecore.Rulesets.Mods.Mod import Mod
+
 
 @dataclass(slots=True)
 class DifficultyAttributes:
     """How hard a beatmap is, with the mods it was calculated for."""
 
-    Mods: list = field(default_factory=list)
+    Mods: list[Mod] = field(default_factory=list)
     StarRating: float = 0.0
     MaxCombo: int = 0

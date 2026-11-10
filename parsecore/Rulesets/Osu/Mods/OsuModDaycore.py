@@ -24,14 +24,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from parsecore.Rulesets.Mods.Mod import Mod
-from parsecore.Rulesets.Mods.ModType import ModType
+from parsecore.Rulesets.Mods.ModDaycore import ModDaycore
 
 
-class ModAutopilot(Mod):
-    """Automatic cursor movement - just follow the rhythm."""
-
-    Name = "Autopilot"
-    Acronym = "AP"
-    Description = "Automatic cursor movement - just follow the rhythm."
-    Type = ModType.Fun
+class OsuModDaycore(ModDaycore):
+    """Slower song playback with pitch modification."""

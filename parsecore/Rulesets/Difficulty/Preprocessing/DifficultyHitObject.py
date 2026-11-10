@@ -52,7 +52,7 @@ class DifficultyHitObject:
             objects: The list this object is part of.
             index: This object's position in that list.
         """
-        self._objects = objects
+        self.difficulty_objects: list[DifficultyHitObject] = objects
         self.Index = index
         self.ClockRate = clock_rate
         self.BaseObject = hit_object
@@ -70,7 +70,7 @@ class DifficultyHitObject:
             backwards_index: ``0`` for the immediately preceding object.
         """
         index = self.Index - (backwards_index + 1)
-        return self._objects[index] if 0 <= index < len(self._objects) else None
+        return self.difficulty_objects[index] if 0 <= index < len(self.difficulty_objects) else None
 
     def Next(self, forwards_index: int = 0) -> DifficultyHitObject | None:
         """Return a later object, or ``None`` if there is none.
@@ -79,7 +79,7 @@ class DifficultyHitObject:
             forwards_index: ``0`` for the immediately following object.
         """
         index = self.Index + (forwards_index + 1)
-        return self._objects[index] if 0 <= index < len(self._objects) else None
+        return self.difficulty_objects[index] if 0 <= index < len(self.difficulty_objects) else None
 
     def HitWindow(self, hit_result: HitResult) -> float:
         """Return the full width of a judgement window, at the clock rate.

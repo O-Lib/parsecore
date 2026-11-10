@@ -25,24 +25,17 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Rulesets.Mania.Objects.ManiaHitObject import ManiaHitObject
+from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
 from parsecore.Rulesets.Scoring.EmptyHitWindows import EmptyHitWindows
 
 
-class HoldNoteBody(ManiaHitObject):
+class HoldNoteBody(ManiaHitObject, IHasDuration):
     """The held part of a hold note."""
 
-    def __init__(
-        self, start_time: float = 0.0, column: int = 0, duration: float = 0.0
-    ) -> None:
-        """Create a hold note body.
-
-        Args:
-            start_time: When the hold begins.
-            column: The column it is played in.
-            duration: How long it must be held.
-        """
-        super().__init__(start_time, column)
-        self.Duration = duration
+    def __init__(self) -> None:
+        """Create a hold note body."""
+        super().__init__()
+        self.Duration = 0.0
 
     @property
     def EndTime(self) -> float:

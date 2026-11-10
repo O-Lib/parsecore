@@ -24,14 +24,31 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from parsecore.Rulesets.Osu.Objects.SliderEndCircle import SliderEndCircle
+
+if TYPE_CHECKING:
+    from parsecore.Rulesets.Osu.Objects.Slider import Slider
 
 
 class SliderTailCircle(SliderEndCircle):
     """The circle at the end of a slider."""
 
+    def __init__(self, slider: Slider) -> None:
+        """Create a slider tail circle.
+
+        Args:
+            slider: The slider this tail belongs to.
+        """
+        super().__init__(slider)
+        self.ClassicSliderBehaviour: bool = False
+
     def CreateJudgement(self):
         """Return the judgement this object is scored with."""
-        from parsecore.Rulesets.Osu.Judgements.OsuJudgement import TailJudgement
+        from parsecore.Rulesets.Osu.Judgements.OsuJudgement import (
+            LegacyTailJudgement,
+            TailJudgement,
+        )
 
-        return TailJudgement()
+        return LegacyTailJudgement() if self.ClassicSliderBehaviour else TailJudgement()

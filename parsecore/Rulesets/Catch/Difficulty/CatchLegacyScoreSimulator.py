@@ -24,6 +24,18 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
+from parsecore.Rulesets.Catch.Mods.CatchModDaycore import CatchModDaycore
+from parsecore.Rulesets.Catch.Mods.CatchModDoubleTime import CatchModDoubleTime
+from parsecore.Rulesets.Catch.Mods.CatchModEasy import CatchModEasy
+from parsecore.Rulesets.Catch.Mods.CatchModFlashlight import CatchModFlashlight
+from parsecore.Rulesets.Catch.Mods.CatchModHalfTime import CatchModHalfTime
+from parsecore.Rulesets.Catch.Mods.CatchModHardRock import CatchModHardRock
+from parsecore.Rulesets.Catch.Mods.CatchModHidden import CatchModHidden
+from parsecore.Rulesets.Catch.Mods.CatchModNightcore import CatchModNightcore
+from parsecore.Rulesets.Catch.Mods.CatchModNoFail import CatchModNoFail
+from parsecore.Rulesets.Catch.Mods.CatchModRelax import CatchModRelax
 from parsecore.Rulesets.Catch.Objects.Banana import Banana, BananaShower
 from parsecore.Rulesets.Catch.Objects.Droplet import Droplet, TinyDroplet
 from parsecore.Rulesets.Catch.Objects.Fruit import Fruit
@@ -31,10 +43,14 @@ from parsecore.Rulesets.Catch.Objects.JuiceStream import JuiceStream
 from parsecore.Rulesets.Catch.Scoring.CatchScoreProcessor import (
     GetBaseScoreForResult,
 )
+from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Mods.ModScoreV2 import ModScoreV2
+from parsecore.Rulesets.Objects.HitObject import HitObject
 from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
     CalculateDifficultyPeppyStars,
 )
 from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
+from parsecore.Rulesets.Objects.Types.IHasPath import IHasPath
 from parsecore.Rulesets.Scoring.HitResult import HitResult
 from parsecore.Rulesets.Scoring.Legacy.ILegacyScoreSimulator import (
     ILegacyScoreSimulator,
@@ -42,23 +58,6 @@ from parsecore.Rulesets.Scoring.Legacy.ILegacyScoreSimulator import (
 from parsecore.Rulesets.Scoring.Legacy.LegacyScoreAttributes import (
     LegacyScoreAttributes,
 )
-
-# What the mods multiply an osu!stable score by, and what they multiply it by
-# once the second scoring version is in play.
-MOD_MULTIPLIERS = {
-    "NF": (0.5, 1.0),
-    "EZ": (0.5, 0.5),
-    "HT": (0.3, 0.3),
-    "DC": (0.3, 0.3),
-    "HD": (1.06, 1.0),
-    "HR": (1.12, 1.12),
-    "DT": (1.06, 1.06),
-    "NC": (1.06, 1.06),
-    "FL": (1.12, 1.12),
-}
-
-# Mods osu!stable refused to score at all.
-UNSCORED_MODS = ("RX",)
 
 
 class CatchLegacyScoreSimulator(ILegacyScoreSimulator):
@@ -71,19 +70,20 @@ class CatchLegacyScoreSimulator(ILegacyScoreSimulator):
         self._combo = 0
         self._score_multiplier = 0.0
 
-    def Simulate(self, beatmap, playable_beatmap) -> LegacyScoreAttributes:
+    def Simulate(self, workingBeatmap: WorkingBeatmap, playable_beatmap: Beatmap) -> LegacyScoreAttributes:
         """Return the highest osu!stable score a beatmap allows.
 
         Args:
-            beatmap: The beatmap as it was decoded.
+            workingBeatmap: The beatmap as it was decoded.
             playable_beatmap: The same beatmap as catch plays it.
         """
         count_normal = 0
         count_slider = 0
         count_spinner = 0
 
+        beatmap = workingBeatmap.Beatmap
         for hit_object in beatmap.HitObjects:
-            if hasattr(hit_object, "Path"):
+            if isinstance(hit_object, IHasPath):
                 count_slider += 1
             elif isinstance(hit_object, IHasDuration):
                 count_spinner += 1
@@ -128,7 +128,7 @@ class CatchLegacyScoreSimulator(ILegacyScoreSimulator):
 
         return attributes
 
-    def _simulate_hit(self, hit_object, attributes: LegacyScoreAttributes) -> None:
+    def _simulate_hit(self, hit_object: HitObject, attributes: LegacyScoreAttributes) -> None:
         """Add what one object is worth to the running score.
 
         Args:
@@ -156,6 +156,7 @@ class CatchLegacyScoreSimulator(ILegacyScoreSimulator):
         elif isinstance(hit_object, Fruit):
             score_increase = 300
             add_score_combo_multiplier = True
+            increase_combo = True
         elif isinstance(hit_object, Banana):
             score_increase = 1100
             increase_combo = False
@@ -177,24 +178,36 @@ class CatchLegacyScoreSimulator(ILegacyScoreSimulator):
         if increase_combo:
             self._combo += 1
 
-    def GetLegacyScoreMultiplier(self, mods: list, difficulty=None) -> float:
+    @staticmethod
+    def GetLegacyScoreMultiplier(mods: list[Mod]) -> float:
         """Return what the mods multiply an osu!stable score by.
 
         Args:
             mods: The mods the score was set with.
-            difficulty: Unused by catch; mania reads it.
         """
-        acronyms = [getattr(mod, "Acronym", None) for mod in mods]
-        score_v2 = "SV2" in acronyms
-
+        score_v2 = any(m for m in mods if isinstance(m, ModScoreV2))
         multiplier = 1.0
 
-        for acronym in acronyms:
-            if acronym in UNSCORED_MODS:
-                return 0.0
+        for mod in mods:
+            if isinstance(mod, (CatchModHardRock, CatchModFlashlight)):
+                multiplier *= 1.12
 
-            pair = MOD_MULTIPLIERS.get(acronym)
-            if pair is not None:
-                multiplier *= pair[1] if score_v2 else pair[0]
+            elif isinstance(mod, (CatchModDoubleTime, CatchModNightcore)):
+                multiplier *= 1.06
+
+            elif isinstance(mod, (CatchModHalfTime, CatchModDaycore)):
+                multiplier *= 0.3
+
+            elif isinstance(mod, CatchModNoFail):
+                multiplier *= 1.0 if score_v2 else 0.5
+
+            elif isinstance(mod, CatchModHidden):
+                multiplier *= 1.0 if score_v2 else 1.06
+
+            elif isinstance(mod, CatchModEasy):
+                multiplier *= 0.5
+
+            elif isinstance(mod, CatchModRelax):
+                return 0.0
 
         return multiplier

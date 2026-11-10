@@ -24,21 +24,29 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
 from parsecore.Rulesets.Mania.Objects.HoldNote import HoldNote
 from parsecore.Rulesets.Mania.Objects.Note import Note
+from parsecore.Rulesets.Mania.Scoring.ManiaHitWindows import ManiaHitWindows
+from parsecore.Rulesets.Mods.IApplicableToHitObject import IApplicableToHitObject
+from parsecore.Rulesets.Objects.HitObject import HitObject
 
 
-class IManiaRateAdjustmentMod:
+class IManiaRateAdjustmentMod(IApplicableToHitObject):
     """A rate mod that scales the hit windows along with the rate."""
+    
+    SpeedChange: float
 
-    def ApplyToHitObject(self, hit_object) -> None:
+    def ApplyToHitObject(self, hit_object: HitObject) -> None:
         """Scale the windows of a note, or of both ends of a hold.
 
         Args:
             hit_object: The object to modify.
         """
         if isinstance(hit_object, HoldNote):
-            hit_object.Head.HitWindows.SpeedMultiplier = self.SpeedChange
-            hit_object.Tail.HitWindows.SpeedMultiplier = self.SpeedChange
+            if hit_object.Head is not None and hit_object.Tail is not None:
+                cast(ManiaHitWindows, hit_object.Head.HitWindows).SpeedMultiplier = self.SpeedChange
+                cast(ManiaHitWindows, hit_object.Tail.HitWindows).SpeedMultiplier = self.SpeedChange
         elif isinstance(hit_object, Note):
-            hit_object.HitWindows.SpeedMultiplier = self.SpeedChange
+            cast(ManiaHitWindows, hit_object.HitWindows).SpeedMultiplier = self.SpeedChange

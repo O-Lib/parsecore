@@ -24,6 +24,11 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.AlternatingMonoPattern import (
     AlternatingMonoPattern,
 )
@@ -33,10 +38,13 @@ from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.MonoStreak im
 from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.RepeatingHitPatterns import (
     RepeatingHitPatterns,
 )
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+    TaikoDifficultyHitObject,
+)
 from parsecore.Rulesets.Taiko.Objects.Hit import Hit
 
 
-def ProcessAndAssign(hit_objects: list) -> None:
+def ProcessAndAssign(hit_objects: list[DifficultyHitObject]) -> None:
     """Encode the beatmap's colours and give every note its groupings.
 
     Args:
@@ -57,7 +65,7 @@ def ProcessAndAssign(hit_objects: list) -> None:
                     hit_object.ColourData.MonoStreak = mono_streak
 
 
-def _encode(data: list) -> list[RepeatingHitPatterns]:
+def _encode(data: list[DifficultyHitObject]) -> list[RepeatingHitPatterns]:
     """Run the three encoding passes over the beatmap.
 
     Args:
@@ -71,7 +79,7 @@ def _encode(data: list) -> list[RepeatingHitPatterns]:
     return _encode_repeating_hit_pattern(alternating_patterns)
 
 
-def _encode_mono_streak(data: list) -> list[MonoStreak]:
+def _encode_mono_streak(data: list[DifficultyHitObject]) -> list[MonoStreak]:
     """Split the notes into runs of a single colour.
 
     Args:
@@ -80,10 +88,11 @@ def _encode_mono_streak(data: list) -> list[MonoStreak]:
     Returns:
         The colour runs, in order.
     """
-    mono_streaks: list[MonoStreak] = []
+    mono_streaks = []
     current: MonoStreak | None = None
 
     for taiko_object in data:
+        taiko_object = cast(TaikoDifficultyHitObject, taiko_object)
         previous_object = taiko_object.PreviousNote(0)
 
         if (
@@ -99,7 +108,7 @@ def _encode_mono_streak(data: list) -> list[MonoStreak]:
     return mono_streaks
 
 
-def _hit_type_of(taiko_object):
+def _hit_type_of(taiko_object: TaikoDifficultyHitObject):
     """Return which side of the drum an object is played on, if any.
 
     Args:
@@ -120,7 +129,7 @@ def _encode_alternating_mono_pattern(
     Returns:
         The alternating patterns, in order.
     """
-    patterns: list[AlternatingMonoPattern] = []
+    patterns = []
     current: AlternatingMonoPattern | None = None
 
     for i, streak in enumerate(data):
@@ -147,7 +156,7 @@ def _encode_repeating_hit_pattern(
     Returns:
         The repeating pattern groups, each knowing how long ago it recurred.
     """
-    hit_patterns: list[RepeatingHitPatterns] = []
+    hit_patterns = []
     current: RepeatingHitPatterns | None = None
 
     i = 0

@@ -23,7 +23,6 @@ SOFTWARE.
 """
 
 import pytest
-import rich.pretty
 
 from parsecore.Beatmaps.Formats.LegacyBeatmapDecoder import LegacyBeatmapDecoder
 from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
@@ -150,7 +149,6 @@ def _play(path, acronyms):
     )
 
     palpable = GetPalpableObjects(playable_beatmap.HitObjects)
-    rich.pretty.pprint(palpable, expand_all=True)
     fruits = sum(1 for h in palpable if isinstance(h, Fruit))
     droplets = sum(
         1

@@ -24,12 +24,18 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
 from parsecore.Rulesets.Difficulty.Skills.StrainSkill import StrainSkill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Osu.Difficulty.Evaluators import FlashlightEvaluator
+from parsecore.Rulesets.Osu.Difficulty.Preprocessing.OsuDifficultyHitObject import (
+    OsuDifficultyHitObject,
+)
 from parsecore.Rulesets.Osu.Mods.OsuModAutopilot import OsuModAutopilot
 from parsecore.Rulesets.Osu.Mods.OsuModDeflate import OsuModDeflate
 from parsecore.Rulesets.Osu.Mods.OsuModFlashlight import OsuModFlashlight
@@ -43,7 +49,7 @@ SKILL_MULTIPLIER = 0.058
 class Flashlight(StrainSkill):
     """Measures how hard a beatmap is with a restricted view."""
 
-    def __init__(self, mods: list | None = None, total_objects: int = 0) -> None:
+    def __init__(self, mods: list[Mod], total_objects) -> None:
         """Create the flashlight skill.
 
         Args:
@@ -122,7 +128,7 @@ class Flashlight(StrainSkill):
             difficulty *= 0.4
 
         difficulty *= (
-            0.985 + DiffUtils.Pow(max(0.0, current.OverallDifficulty), 2) / 4000
+            0.985 + DiffUtils.Pow(max(0.0, cast(OsuDifficultyHitObject, current).OverallDifficulty), 2) / 4000
         )
 
         return difficulty

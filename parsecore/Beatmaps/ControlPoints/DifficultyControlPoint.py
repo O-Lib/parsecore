@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from parsecore.Beatmaps.ControlPoints.ControlPoint import ControlPoint
+from parsecore.Utils.Precision import Clamp
 
 
 @dataclass(slots=True)
@@ -38,9 +39,9 @@ class DifficultyControlPoint(ControlPoint):
 
     def __post_init__(self) -> None:
         """Clamp the slider velocity to the range osu! accepts."""
-        self.SliderVelocity = min(max(self.SliderVelocity, 0.1), 10.0)
+        self.SliderVelocity = Clamp(self.SliderVelocity, 0.1, 10.0)
 
-    def IsRedundant(self, existing: ControlPoint) -> bool:
+    def IsRedundant(self, existing: ControlPoint | None) -> bool:
         """Return whether this point matches ``existing``.
 
         Args:
@@ -50,6 +51,23 @@ class DifficultyControlPoint(ControlPoint):
             isinstance(existing, DifficultyControlPoint)
             and self.GenerateTicks == existing.GenerateTicks
             and self.SliderVelocity == existing.SliderVelocity
+        )
+
+    def __eq__(self, value: object) -> bool:
+        """Check equality with another difficulty control point.
+
+        Args:
+            value: The object to compare with.
+
+        Returns:
+            ``True`` if all difficulty properties and time match.
+        """
+        if not isinstance(value, DifficultyControlPoint):
+            raise NotImplementedError
+        return (
+                super().__eq__(value)
+                and self.GenerateTicks == value.GenerateTicks
+                and self.SliderVelocity == value.SliderVelocity
         )
 
 

@@ -30,6 +30,11 @@ from parsecore.Rulesets.Mods.ModRelax import ModRelax
 class OsuModRelax(ModRelax):
     """You don't need to click. Give your clicking/tapping fingers a break."""
 
-    Name = "Relax"
-    Acronym = "RX"
     Description = "You don't need to click. Give your clicking/tapping fingers a break."
+
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Relax."""
+        from parsecore.Rulesets.Osu.Mods.OsuModAutopilot import OsuModAutopilot
+        from parsecore.Rulesets.Osu.Mods.OsuModMagnetised import OsuModMagnetised
+        return [*super().IncompatibleMods ,type(OsuModAutopilot), type(OsuModMagnetised)]

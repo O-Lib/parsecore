@@ -24,14 +24,20 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
 from parsecore.Rulesets.Difficulty.Skills.HarmonicSkill import HarmonicSkill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Osu.Difficulty.Evaluators.Speed import (
     RhythmEvaluator,
     SpeedEvaluator,
+)
+from parsecore.Rulesets.Osu.Difficulty.Preprocessing.OsuDifficultyHitObject import (
+    OsuDifficultyHitObject,
 )
 from parsecore.Rulesets.Osu.Mods.OsuModAutopilot import OsuModAutopilot
 from parsecore.Rulesets.Osu.Mods.OsuModRelax import OsuModRelax
@@ -46,7 +52,7 @@ class Speed(HarmonicSkill):
     HarmonicScale = 20
     DecayExponent = 0.9
 
-    def __init__(self, mods: list | None = None) -> None:
+    def __init__(self, mods: list[Mod]) -> None:
         """Create the speed skill.
 
         Args:
@@ -75,7 +81,7 @@ class Speed(HarmonicSkill):
             # Relax taps for the player.
             return 0.0
 
-        decay = self._strain_decay(current.AdjustedDeltaTime)
+        decay = self._strain_decay(cast(OsuDifficultyHitObject, current).AdjustedDeltaTime)
         self._current_strain *= decay
         self._current_strain += (
             self._calculate_adjusted_difficulty(current) * (1 - decay) * SKILL_MULTIPLIER
@@ -124,7 +130,7 @@ class Speed(HarmonicSkill):
         """
         if not self._slider_strains:
             return 0.0
-        if self.ObjectWeightSum == 0:
+        if self.ObjectWeightSum == 0.0:
             return 0.0
 
         consistent_top_object = difficulty_value / self.ObjectWeightSum

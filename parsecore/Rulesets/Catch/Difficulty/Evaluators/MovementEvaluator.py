@@ -25,9 +25,14 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
 from parsecore.Rulesets.Catch.Difficulty.Preprocessing.CatchDifficultyHitObject import (
     NORMALIZED_HALF_CATCHER_WIDTH,
+    CatchDifficultyHitObject,
+)
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
 )
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
 from parsecore.Utils.Vector2 import f32
@@ -45,14 +50,15 @@ MAX_LINEAR_SPACING_LOOKBACK = 10
 LINEAR_SPACING_TOLERANCE = 0.05
 
 
-def EvaluateDifficultyOf(current) -> float:
+def EvaluateDifficultyOf(current: DifficultyHitObject) -> float:
     """Return how hard the movement onto an object is.
 
     Args:
         current: The difficulty object to rate.
     """
-    last = current.Previous(0)
-    last_last = current.Previous(1)
+    current = cast(CatchDifficultyHitObject, current)
+    last = cast(CatchDifficultyHitObject, current.Previous())
+    last_last = cast(CatchDifficultyHitObject, current.Previous(1))
 
     catcher_speed_multiplier = current.ClockRate
 
@@ -91,7 +97,7 @@ def EvaluateDifficultyOf(current) -> float:
     linear_spacing_count = 0
 
     for i in range(min(current.Index, MAX_LINEAR_SPACING_LOOKBACK)):
-        previous = current.Previous(i)
+        previous = cast(CatchDifficultyHitObject, current.Previous(i))
 
         if (
             _sign(current.DistanceMoved) != _sign(previous.DistanceMoved)

@@ -222,7 +222,13 @@ def CreateModFromAcronym(acronym: str, ruleset_id: int, **settings: Any) -> Mod:
             f"ruleset {ruleset_id} has no mod {acronym!r}; "
             f"it has {', '.join(sorted(table))}"
         )
-    return mod_type(**settings)
+
+    mod = mod_type()
+    for key, value in settings.items():
+        if hasattr(mod, key):
+            setattr(mod, key, value)
+
+    return mod
 
 
 def CreateModsFromAcronyms(

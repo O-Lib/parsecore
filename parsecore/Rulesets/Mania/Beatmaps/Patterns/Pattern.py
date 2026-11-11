@@ -24,17 +24,19 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Rulesets.Mania.Objects.ManiaHitObject import ManiaHitObject
+
 
 class Pattern:
     """The notes generated for one object, and the columns they fill."""
 
     def __init__(self) -> None:
         """Create an empty pattern."""
-        self._hit_objects: list = []
+        self._hit_objects: list[ManiaHitObject] = []
         self._contained_columns: set[int] = set()
 
     @property
-    def HitObjects(self) -> list:
+    def HitObjects(self) -> list[ManiaHitObject]:
         """Return every note in this pattern."""
         return self._hit_objects
 
@@ -51,7 +53,7 @@ class Pattern:
         """Return how many columns this pattern fills."""
         return len(self._contained_columns)
 
-    def Add(self, value) -> None:
+    def Add(self, value: ManiaHitObject | Pattern) -> None:
         """Add a note, or every note of another pattern.
 
         Args:

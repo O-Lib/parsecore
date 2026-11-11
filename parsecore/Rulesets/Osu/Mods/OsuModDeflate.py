@@ -24,22 +24,17 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from parsecore.Rulesets.Mods.Mod import Mod
-from parsecore.Rulesets.Mods.ModType import ModType
+from parsecore.Rulesets.Mods.ModWithVisibilityAdjustment import (
+    ModWithVisibilityAdjustment,
+)
+from parsecore.Utils.Precision import Clamp
+from parsecore.Utils.Vector2 import f32
 
 
-class OsuModDeflate(Mod):
+class OsuModDeflate(ModWithVisibilityAdjustment):
     """Objects shrink as they approach."""
 
     Name = "Deflate"
     Acronym = "DF"
     Description = "Hit them at the right size!"
-    Type = ModType.Fun
-
-    def __init__(self, start_scale: float = 2.0) -> None:
-        """Create the mod.
-
-        Args:
-            start_scale: How large objects begin, relative to their real size.
-        """
-        self.StartScale = start_scale
+    StartScale: float = f32(Clamp(2.0, 1.0, 25.0))

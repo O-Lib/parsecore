@@ -26,10 +26,21 @@ from __future__ import annotations
 
 import math
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Beatmaps.BeatmapConverter import BeatmapConverter
+from parsecore.Beatmaps.BeatmapProcessor import BeatmapProcessor
+from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
+from parsecore.Rulesets.Difficulty.DifficultyAttributes import DifficultyAttributes
 from parsecore.Rulesets.Difficulty.DifficultyCalculator import DifficultyCalculator
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Skills.HarmonicSkill import HarmonicSkill
 from parsecore.Rulesets.Difficulty.Skills.Skill import Skill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapConverter import OsuBeatmapConverter
+from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapProcessor import OsuBeatmapProcessor
 from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyAttributes import (
     OsuDifficultyAttributes,
 )
@@ -48,6 +59,8 @@ from parsecore.Rulesets.Osu.Mods.OsuModFlashlight import OsuModFlashlight
 from parsecore.Rulesets.Osu.Objects.HitCircle import HitCircle
 from parsecore.Rulesets.Osu.Objects.Slider import Slider
 from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
+from parsecore.Utils import ModUtils
+from parsecore.Utils.Precision import Clamp
 
 # The difficulty algorithm this port follows, as osu! versions it.
 VERSION = 20260706
@@ -84,7 +97,7 @@ def SumCognitionDifficulty(reading: float, flashlight: float) -> float:
     return DiffUtils.Norm(
         PERFORMANCE_NORM_EXPONENT,
         reading,
-        flashlight * min(max(flashlight / reading, 0.25), 1.0),
+        flashlight * Clamp(flashlight / reading, 0.25, 1.0),
     )
 
 
@@ -131,18 +144,34 @@ def _cbrt(value: float) -> float:
 class OsuDifficultyCalculator(DifficultyCalculator):
     """Calculates how hard an osu! beatmap is."""
 
-    Version = VERSION
+    def __init__(self, beatmap: WorkingBeatmap) -> None:
+        """Initialize a new instance of the osu! difficulty calculator.
 
-    def CreateDifficultyHitObjects(
-        self, beatmap, clock_rate: float
-    ) -> list[OsuDifficultyHitObject]:
+        Args:
+            beatmap: The working beatmap to calculate difficulty for.
+        """
+        super().__init__(beatmap)
+        self.Version = VERSION
+
+    @property
+    def converter_type(self) -> type[BeatmapConverter]:
+        """Return the beatmap converter type associated with the osu! ruleset."""
+        return OsuBeatmapConverter
+
+    @property
+    def processor_type(self) -> type[BeatmapProcessor] | None:
+        """Return the beatmap processor type associated with the osu! ruleset."""
+        return OsuBeatmapProcessor
+
+    def CreateDifficultyHitObjects(self, beatmap: Beatmap, mods: list[Mod]) -> list[DifficultyHitObject]:
         """Return the objects the skills walk, in time order.
 
         Args:
             beatmap: The beatmap being calculated.
-            clock_rate: The rate the beatmap is played at.
+            mods: The mods to create difficulty objects.
         """
         objects: list[OsuDifficultyHitObject] = []
+        clock_rate = ModUtils.CalculateRateWithMods(mods)
 
         # The first jump is formed by the first two objects of the map.
         for i in range(1, len(beatmap.HitObjects)):
@@ -158,14 +187,14 @@ class OsuDifficultyCalculator(DifficultyCalculator):
 
         return objects
 
-    def CreateSkills(self, beatmap, mods: list, clock_rate: float) -> list[Skill]:
+    def CreateSkills(self, beatmap: Beatmap, mods: list[Mod]) -> list[Skill]:
         """Return the skills osu! measures.
 
         Args:
             beatmap: The beatmap being calculated.
             mods: The mods in effect.
-            clock_rate: The rate the beatmap is played at.
         """
+
         skills: list[Skill] = [
             Aim(mods, True),
             Aim(mods, False),
@@ -178,22 +207,19 @@ class OsuDifficultyCalculator(DifficultyCalculator):
 
         return skills
 
-    def CreateDifficultyAttributes(
-        self, beatmap, mods: list, skills: list[Skill], clock_rate: float
-    ) -> OsuDifficultyAttributes:
+    def CreateDifficultyAttributes(self, beatmap: Beatmap, mods: list[Mod], skills: list[Skill]) -> DifficultyAttributes:
         """Reduce the processed skills to osu!'s difficulty attributes.
 
         Args:
             beatmap: The beatmap being calculated.
             mods: The mods in effect.
             skills: The skills, already fed every object.
-            clock_rate: The rate the beatmap is played at.
 
         Returns:
             The beatmap's difficulty attributes, including its star rating.
         """
         if not beatmap.HitObjects:
-            return OsuDifficultyAttributes(Mods=list(mods))
+            return OsuDifficultyAttributes(Mods=mods)
 
         aim = next(s for s in skills if isinstance(s, Aim) and s.IncludeSliders)
         aim_without_sliders = next(
@@ -259,7 +285,7 @@ class OsuDifficultyCalculator(DifficultyCalculator):
         speed_rating = _calculate_difficulty_rating(speed_difficulty_value)
         reading_rating = _calculate_difficulty_rating(reading_difficulty_value)
 
-        flashlight_rating = 0.0
+        flashlight_rating: float | None = None
         if flashlight is not None:
             flashlight_rating = _calculate_difficulty_rating(
                 flashlight.DifficultyValue()
@@ -270,7 +296,7 @@ class OsuDifficultyCalculator(DifficultyCalculator):
         base_reading_performance = HarmonicSkill.DifficultyToPerformance(reading_rating)
         base_flashlight_performance = Flashlight.DifficultyToPerformance(
             flashlight_rating
-        )
+        ) if flashlight_rating is not None else 0.0
 
         base_cognition_performance = SumCognitionDifficulty(
             base_reading_performance, base_flashlight_performance
@@ -290,14 +316,14 @@ class OsuDifficultyCalculator(DifficultyCalculator):
             beatmap, len(beatmap.HitObjects)
         )
         legacy_score_base_multiplier = (
-            LegacyScoreUtils.CalculateDifficultyPeppyStarsFor(self.OriginalBeatmap)
+            LegacyScoreUtils.CalculateDifficultyPeppyStarsFor(self.WorkingBeatmap.Beatmap)
         )
         score_attributes = OsuLegacyScoreSimulator().Simulate(
-            self.OriginalBeatmap, beatmap
+            self.WorkingBeatmap, beatmap
         )
 
         return OsuDifficultyAttributes(
-            Mods=list(mods),
+            Mods=mods,
             StarRating=_calculate_star_rating(base_performance),
             MaxCombo=beatmap.GetMaxCombo(),
             AimDifficulty=aim_rating,

@@ -37,7 +37,7 @@ class OsuDifficultyAttributes(DifficultyAttributes):
     AimDifficultSliderCount: float = 0.0
     SpeedDifficulty: float = 0.0
     SpeedNoteCount: float = 0.0
-    FlashlightDifficulty: float = 0.0
+    FlashlightDifficulty: float | None = None
     ReadingDifficulty: float = 0.0
 
     SliderFactor: float = 1.0

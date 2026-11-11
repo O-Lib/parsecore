@@ -24,11 +24,16 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import TypeVar
+
 # How deep the quicksort may recurse before it falls back to a heapsort.
 QUICK_SORT_DEPTH_THRESHOLD = 32
 
+T = TypeVar("T")
 
-def Sort(keys: list, comparer) -> None:
+
+def Sort(keys: list[T], comparer: Callable[[T, T], int]) -> None:
     """Sort a list in place, exactly the way osu! does.
 
     Args:
@@ -45,7 +50,7 @@ def Sort(keys: list, comparer) -> None:
 
 
 def _depth_limited_quick_sort(
-    keys: list, left: int, right: int, comparer, depth_limit: int
+    keys: list[T], left: int, right: int, comparer: Callable[[T, T], int], depth_limit: int
 ) -> None:
     """Sort one stretch of the list, falling back once it recurses too deep.
 
@@ -108,7 +113,7 @@ def _depth_limited_quick_sort(
             return
 
 
-def _heapsort(keys: list, lo: int, hi: int, comparer) -> None:
+def _heapsort(keys: list[T], lo: int, hi: int, comparer: Callable[[T, T], int]) -> None:
     """Sort one stretch of the list as a heap.
 
     Args:
@@ -127,7 +132,7 @@ def _heapsort(keys: list, lo: int, hi: int, comparer) -> None:
         _down_heap(keys, 1, i - 1, lo, comparer)
 
 
-def _down_heap(keys: list, i: int, n: int, lo: int, comparer) -> None:
+def _down_heap(keys: list[T], i: int, n: int, lo: int, comparer: Callable[[T, T], int]) -> None:
     """Push one item down the heap until it sits below its children.
 
     Args:
@@ -154,7 +159,7 @@ def _down_heap(keys: list, i: int, n: int, lo: int, comparer) -> None:
     keys[lo + i - 1] = d
 
 
-def _swap(items: list, i: int, j: int) -> None:
+def _swap(items: list[T], i: int, j: int) -> None:
     """Exchange two items.
 
     Args:
@@ -166,7 +171,7 @@ def _swap(items: list, i: int, j: int) -> None:
         items[i], items[j] = items[j], items[i]
 
 
-def _swap_if_greater(keys: list, comparer, a: int, b: int) -> None:
+def _swap_if_greater(keys: list[T], comparer: Callable[[T, T], int], a: int, b: int) -> None:
     """Exchange two items if the first sorts after the second.
 
     Args:

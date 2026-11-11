@@ -35,4 +35,3 @@ class ModScoreV2(Mod):
     Acronym = "SV2"
     Description = "Score set on earlier osu! versions will be conveyed here."
     Type = ModType.System
-    ScoreMultiplier = 1.0

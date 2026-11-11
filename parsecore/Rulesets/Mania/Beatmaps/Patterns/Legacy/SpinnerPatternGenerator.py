@@ -25,6 +25,7 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Audio.HitSampleInfo import HIT_FINISH, HIT_NORMAL
+from parsecore.Beatmaps.Beatmap import Beatmap
 from parsecore.Rulesets.Mania.Beatmaps.Patterns.Legacy.LegacyPatternGenerator import (
     LegacyPatternGenerator,
 )
@@ -32,13 +33,21 @@ from parsecore.Rulesets.Mania.Beatmaps.Patterns.Legacy.PatternType import Patter
 from parsecore.Rulesets.Mania.Beatmaps.Patterns.Pattern import Pattern
 from parsecore.Rulesets.Mania.Objects.HoldNote import HoldNote
 from parsecore.Rulesets.Mania.Objects.Note import Note
+from parsecore.Rulesets.Objects.HitObject import HitObject
+from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
+from parsecore.Utils.LegacyRandom import LegacyRandom
 
 
 class SpinnerPatternGenerator(LegacyPatternGenerator):
     """Turns one spinner into the object it becomes on a mania stage."""
 
     def __init__(
-        self, random, hit_object, beatmap, total_columns: int, previous_pattern
+            self,
+            random: LegacyRandom,
+            hit_object: HitObject,
+            beatmap: Beatmap,
+            total_columns: int,
+            previous_pattern: Pattern
     ) -> None:
         """Create a generator for one spinner.
 
@@ -51,8 +60,8 @@ class SpinnerPatternGenerator(LegacyPatternGenerator):
         """
         super().__init__(random, hit_object, beatmap, total_columns, previous_pattern)
 
-        end_time = getattr(hit_object, "EndTime", None)
-        self._end_time = int(end_time) if end_time is not None else 0
+        end_time = hit_object.EndTime if isinstance(hit_object, IHasDuration) else 0
+        self._end_time = int(end_time)
 
         self._convert_type = (
             PatternType.None_
@@ -60,7 +69,7 @@ class SpinnerPatternGenerator(LegacyPatternGenerator):
             else PatternType.ForceNotStack
         )
 
-    def Generate(self) -> list:
+    def Generate(self) -> list[Pattern]:
         """Return the single pattern for this spinner."""
         return [self._generate()]
 
@@ -109,18 +118,19 @@ class SpinnerPatternGenerator(LegacyPatternGenerator):
             hold_note: Whether it is long enough to be held.
         """
         if hold_note:
-            new_object = HoldNote(
-                self.HitObject.StartTime,
-                column,
-                self._end_time - self.HitObject.StartTime,
-                node_samples=[
-                    [s for s in self.HitObject.Samples if s.Name == HIT_NORMAL],
-                    self.HitObject.Samples,
-                ],
-            )
+            new_object = HoldNote()
+            new_object.StartTime = self.HitObject.StartTime
+            new_object.Column = column
+            new_object.Duration = self._end_time - self.HitObject.StartTime
+            new_object.NodeSamples = [
+                [s for s in self.HitObject.Samples if s.Name == HIT_NORMAL],
+                self.HitObject.Samples,
+            ]
             new_object.Samples = self.HitObject.Samples
         else:
-            new_object = Note(self.HitObject.StartTime, column)
+            new_object = Note()
+            new_object.StartTime = self.HitObject.StartTime
+            new_object.Column = column
             new_object.Samples = self.HitObject.Samples
 
         pattern.Add(new_object)

@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from parsecore.Beatmaps.ControlPoints.ControlPoint import ControlPoint
+from parsecore.Utils.Precision import Clamp
 
 
 @dataclass(slots=True)
@@ -38,9 +39,9 @@ class EffectControlPoint(ControlPoint):
 
     def __post_init__(self) -> None:
         """Clamp the scroll speed to the range osu! accepts."""
-        self.ScrollSpeed = min(max(self.ScrollSpeed, 0.01), 10.0)
+        self.ScrollSpeed = Clamp(self.ScrollSpeed, 0.01, 10.0)
 
-    def IsRedundant(self, existing: ControlPoint) -> bool:
+    def IsRedundant(self, existing: ControlPoint | None) -> bool:
         """Return whether this point matches ``existing``.
 
         Args:
@@ -50,6 +51,23 @@ class EffectControlPoint(ControlPoint):
             isinstance(existing, EffectControlPoint)
             and self.KiaiMode == existing.KiaiMode
             and self.ScrollSpeed == existing.ScrollSpeed
+        )
+
+    def __eq__(self, value: object) -> bool:
+        """Check equality with another effect control point.
+
+        Args:
+            value: The object to compare with.
+
+        Returns:
+            ``True`` if all effect properties and time match.
+        """
+        if not isinstance(value, EffectControlPoint):
+            raise NotImplementedError
+        return (
+            super().__eq__(value)
+            and self.ScrollSpeed == value.ScrollSpeed
+            and self.KiaiMode == value.KiaiMode
         )
 
 

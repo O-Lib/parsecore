@@ -24,9 +24,13 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
+from parsecore.Rulesets.Mania.Objects.ManiaHitObject import ManiaHitObject
+from parsecore.Rulesets.Objects.HitObject import HitObject
 
 
 class ManiaDifficultyHitObject(DifficultyHitObject):
@@ -34,13 +38,13 @@ class ManiaDifficultyHitObject(DifficultyHitObject):
 
     def __init__(
         self,
-        hit_object,
-        last_object,
+        hit_object: HitObject,
+        last_object: HitObject,
         clock_rate: float,
-        objects: list,
-        per_column_objects: list[list],
+        objects: list[DifficultyHitObject],
+        per_column_objects: list[list[DifficultyHitObject]],
         index: int,
-    ) -> None:
+    ):
         """Create a difficulty object for one note.
 
         Args:
@@ -54,10 +58,11 @@ class ManiaDifficultyHitObject(DifficultyHitObject):
         super().__init__(hit_object, last_object, clock_rate, objects, index)
 
         total_columns = len(per_column_objects)
+        self.BaseObject = cast(ManiaHitObject, self.BaseObject)
         self._per_column_objects = per_column_objects
-        self.Column = hit_object.Column
+        self.Column = self.BaseObject.Column
         self._column_index = len(per_column_objects[self.Column])
-        self.PreviousHitObjects: list = [None] * total_columns
+        self.PreviousHitObjects: list[ManiaDifficultyHitObject | None] = [None] * total_columns
 
         previous = self.PrevInColumn(0)
         self.ColumnStrainTime = (
@@ -67,6 +72,7 @@ class ManiaDifficultyHitObject(DifficultyHitObject):
 
         if index > 0:
             previous_note = objects[index - 1]
+            previous_note = cast(ManiaDifficultyHitObject, previous_note)
 
             for i in range(len(previous_note.PreviousHitObjects)):
                 self.PreviousHitObjects[i] = previous_note.PreviousHitObjects[i]
@@ -75,7 +81,7 @@ class ManiaDifficultyHitObject(DifficultyHitObject):
             # which is what osu! itself does.
             self.PreviousHitObjects[previous_note.Column] = previous_note
 
-    def PrevInColumn(self, backwards_index: int):
+    def PrevInColumn(self, backwards_index: int) -> ManiaDifficultyHitObject | None:
         """Return an earlier note in this column, tails excluded.
 
         Args:
@@ -83,9 +89,9 @@ class ManiaDifficultyHitObject(DifficultyHitObject):
         """
         index = self._column_index - (backwards_index + 1)
         column = self._per_column_objects[self.Column]
-        return column[index] if 0 <= index < len(column) else None
+        return cast(ManiaDifficultyHitObject, column[index]) if 0 <= index < len(column) else None
 
-    def NextInColumn(self, forwards_index: int):
+    def NextInColumn(self, forwards_index: int) -> ManiaDifficultyHitObject | None:
         """Return a later note in this column, tails excluded.
 
         Args:
@@ -93,4 +99,4 @@ class ManiaDifficultyHitObject(DifficultyHitObject):
         """
         index = self._column_index + (forwards_index + 1)
         column = self._per_column_objects[self.Column]
-        return column[index] if 0 <= index < len(column) else None
+        return cast(ManiaDifficultyHitObject, column[index]) if 0 <= index < len(column) else None

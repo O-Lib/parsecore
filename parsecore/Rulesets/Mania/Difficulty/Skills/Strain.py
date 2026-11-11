@@ -24,12 +24,21 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Skills.StrainDecaySkill import StrainDecaySkill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
 from parsecore.Rulesets.Mania.Difficulty.Evaluators import (
     IndividualStrainEvaluator,
     OverallStrainEvaluator,
 )
+from parsecore.Rulesets.Mania.Difficulty.Preprocessing.ManiaDifficultyHitObject import (
+    ManiaDifficultyHitObject,
+)
+from parsecore.Rulesets.Mods.Mod import Mod
 
 # How fast one finger's strain falls away, per second.
 INDIVIDUAL_DECAY_BASE = 0.125
@@ -41,10 +50,10 @@ OVERALL_DECAY_BASE = 0.30
 class Strain(StrainDecaySkill):
     """Measures how hard a mania beatmap is to play."""
 
-    SkillMultiplier = 1
-    StrainDecayBase = 1
+    SkillMultiplier = 1.0
+    StrainDecayBase = 1.0
 
-    def __init__(self, mods: list | None = None, total_columns: int = 0) -> None:
+    def __init__(self, mods: list[Mod], total_columns: int) -> None:
         """Create the skill.
 
         Args:
@@ -53,20 +62,23 @@ class Strain(StrainDecaySkill):
         """
         super().__init__(mods)
 
-        self._individual_strains = [0.0] * total_columns
+        self._individual_strains: list[float] = [0.0] * total_columns
         self._highest_individual_strain = 0.0
         self._overall_strain = 1.0
 
-    def StrainValueOf(self, current) -> float:
+    def StrainValueOf(self, current: DifficultyHitObject) -> float:
         """Return what one note adds to the standing strain.
 
         Args:
             current: The difficulty object to rate.
         """
+        current = cast(ManiaDifficultyHitObject, current)
         column = current.Column
+        
+        current_strain = float(self._individual_strains[column])
 
         self._individual_strains[column] = _apply_decay(
-            self._individual_strains[column],
+            current_strain,
             current.ColumnStrainTime,
             INDIVIDUAL_DECAY_BASE,
         )
@@ -96,14 +108,17 @@ class Strain(StrainDecaySkill):
             - self.CurrentStrain
         )
 
-    def CalculateInitialStrain(self, offset: float, current) -> float:
+    def CalculateInitialStrain(
+        self, time: float, current: DifficultyHitObject
+    ) -> float:
         """Return the strain a new section starts at.
 
         Args:
-            offset: When the section begins.
+            time: When the section begins.
             current: The first object of the new section.
         """
-        elapsed = offset - current.Previous(0).StartTime
+        offset = time
+        elapsed = offset - current.Previous().StartTime
 
         return _apply_decay(
             self._highest_individual_strain, elapsed, INDIVIDUAL_DECAY_BASE

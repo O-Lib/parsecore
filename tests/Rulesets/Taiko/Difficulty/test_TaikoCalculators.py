@@ -62,16 +62,14 @@ def _beatmap(pattern: str, gap: float = 150.0, od: float = 7.0, mods=None):
     decoded = LegacyBeatmapDecoder.FromText(
         HEADER.format(od=od) + "".join(lines)
     )
-    return decoded, WorkingBeatmap(decoded).GetPlayableBeatmap(
-        TaikoBeatmapConverter, None, mods or []
-    )
+    return decoded, WorkingBeatmap(decoded)
 
 
 def _rate(pattern: str, gap: float = 150.0, od: float = 7.0, mods=None):
     """Return the difficulty attributes of a written-out pattern of notes."""
     mods = mods or []
-    _, beatmap = _beatmap(pattern, gap, od, mods)
-    return TaikoDifficultyCalculator(beatmap).Calculate(mods)
+    _, working_beatmap = _beatmap(pattern, gap, od, mods)
+    return TaikoDifficultyCalculator(working_beatmap).Calculate(mods)
 
 
 def test_a_beatmap_is_rated_above_zero():
@@ -86,7 +84,7 @@ def test_a_beatmap_is_rated_above_zero():
 def test_an_empty_beatmap_is_rated_at_nothing():
     """A beatmap with no objects has no difficulty to report."""
     decoded = LegacyBeatmapDecoder.FromText(HEADER.format(od=7))
-    beatmap = WorkingBeatmap(decoded).GetPlayableBeatmap(TaikoBeatmapConverter)
+    beatmap = WorkingBeatmap(decoded)
 
     attributes = TaikoDifficultyCalculator(beatmap).Calculate([])
 
@@ -173,7 +171,9 @@ def _perfect_score(pattern: str, gap: float = 150.0, od: float = 7.0, mods=None)
     mods = mods or []
     decoded, beatmap = _beatmap(pattern, gap, od, mods)
     attributes = TaikoDifficultyCalculator(beatmap).Calculate(mods)
-    notes = sum(1 for h in beatmap.HitObjects if isinstance(h, Hit))
+
+    playable_beatmap = beatmap.GetPlayableBeatmap(TaikoBeatmapConverter, None, [])
+    notes = sum(1 for h in playable_beatmap.HitObjects if isinstance(h, Hit))
 
     score = ScoreInfo(
         Accuracy=1.0,
@@ -181,7 +181,7 @@ def _perfect_score(pattern: str, gap: float = 150.0, od: float = 7.0, mods=None)
         RulesetID=decoded.BeatmapInfo.RulesetID,
         Statistics={HitResult.Great: notes},
         Mods=mods,
-        BeatmapDifficulty=decoded.Difficulty,
+        BeatmapInfo=decoded.BeatmapInfo,
     )
     return TaikoPerformanceCalculator().Calculate(score, attributes)
 
@@ -208,7 +208,7 @@ def test_missing_everything_is_worth_nothing():
         RulesetID=1,
         Statistics={HitResult.Miss: 20},
         Mods=[],
-        BeatmapDifficulty=decoded.Difficulty,
+        BeatmapInfo=decoded.BeatmapInfo,
     )
     performance = TaikoPerformanceCalculator().Calculate(score, attributes)
 

@@ -113,8 +113,9 @@ def test_delta_time_never_falls_below_the_minimum():
 def test_right_angle_pattern_measures_ninety_degrees():
     """Objects forming a right angle report a right angle."""
     objects = _difficulty_objects(FOUR_CIRCLES_RIGHT_ANGLE)
-    assert objects[2].Angle is not None
-    assert math.degrees(objects[2].Angle) == pytest.approx(90.0, abs=1e-6)
+    angle = objects[2].Angle
+    assert angle is not None
+    assert math.degrees(angle) == pytest.approx(90.0, abs=1e-6)
 
 
 def test_angles_need_two_preceding_objects():

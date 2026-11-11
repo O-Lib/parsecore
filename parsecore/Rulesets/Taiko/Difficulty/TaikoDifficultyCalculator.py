@@ -26,8 +26,21 @@ from __future__ import annotations
 
 import math
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Beatmaps.BeatmapConverter import BeatmapConverter
+from parsecore.Beatmaps.BeatmapProcessor import BeatmapProcessor
+from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
+from parsecore.Rulesets.Difficulty.DifficultyAttributes import DifficultyAttributes
 from parsecore.Rulesets.Difficulty.DifficultyCalculator import DifficultyCalculator
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
+from parsecore.Rulesets.Difficulty.Skills.Skill import Skill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Taiko.Beatmaps.TaikoBeatmapConverter import (
+    TaikoBeatmapConverter,
+)
 from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour import (
     TaikoColourDifficultyPreprocessor,
 )
@@ -44,6 +57,8 @@ from parsecore.Rulesets.Taiko.Difficulty.Skills.Stamina import Stamina
 from parsecore.Rulesets.Taiko.Difficulty.TaikoDifficultyAttributes import (
     TaikoDifficultyAttributes,
 )
+from parsecore.Rulesets.Taiko.Mods.TaikoModRelax import TaikoModRelax
+from parsecore.Utils import ModUtils
 
 # The difficulty algorithm this matches, as osu! versions it.
 VERSION = 20260706
@@ -65,7 +80,7 @@ class TaikoDifficultyCalculator(DifficultyCalculator):
 
     Version = VERSION
 
-    def __init__(self, beatmap) -> None:
+    def __init__(self, beatmap: WorkingBeatmap) -> None:
         """Create a calculator for a beatmap.
 
         Args:
@@ -77,18 +92,25 @@ class TaikoDifficultyCalculator(DifficultyCalculator):
         self._is_relax = False
         self._is_convert = False
 
-    def CreateSkills(self, beatmap, mods: list, clock_rate: float) -> list:
+    @property
+    def converter_type(self) -> type[BeatmapConverter]:
+        """Return the converter type used to convert beatmaps for taiko."""
+        return TaikoBeatmapConverter
+
+    @property
+    def processor_type(self) -> type[BeatmapProcessor] | None:
+        """Return the beatmap processor type for taiko, if any."""
+        return None
+
+    def CreateSkills(self, beatmap: Beatmap, mods: list[Mod]) -> list[Skill]:
         """Return the skills a taiko beatmap is rated on.
 
         Args:
             beatmap: The beatmap being rated.
             mods: The mods the score was set with.
-            clock_rate: The rate the beatmap is played at.
         """
         self._is_convert = beatmap.BeatmapInfo.RulesetID == OSU_RULESET_ID
-        self._is_relax = any(
-            getattr(mod, "Acronym", None) == "RX" for mod in mods
-        )
+        self._is_relax = any(m for m in mods if isinstance(m, TaikoModRelax))
 
         return [
             Rhythm(mods),
@@ -98,7 +120,7 @@ class TaikoDifficultyCalculator(DifficultyCalculator):
             Stamina(mods, True, self._is_convert),
         ]
 
-    def CreateDifficultyHitObjects(self, beatmap, clock_rate: float) -> list:
+    def CreateDifficultyHitObjects(self, beatmap: Beatmap, mods: list[Mod]) -> list[DifficultyHitObject]:
         """Return one difficulty object per note, with its groupings assigned.
 
         The first two objects only provide timing, so the run starts at the
@@ -106,12 +128,14 @@ class TaikoDifficultyCalculator(DifficultyCalculator):
 
         Args:
             beatmap: The beatmap being rated.
-            clock_rate: The rate the beatmap is played at.
+            mods: The mods to create difficulty objects.
         """
         difficulty_hit_objects: list = []
         centre_objects: list = []
         rim_objects: list = []
         note_objects: list = []
+
+        clock_rate = ModUtils.CalculateRateWithMods(mods)
 
         for i in range(2, len(beatmap.HitObjects)):
             difficulty_hit_objects.append(
@@ -135,20 +159,23 @@ class TaikoDifficultyCalculator(DifficultyCalculator):
         return difficulty_hit_objects
 
     def CreateDifficultyAttributes(
-        self, beatmap, mods: list, skills: list, clock_rate: float
-    ) -> TaikoDifficultyAttributes:
+            self, beatmap: Beatmap, mods: list[Mod], skills: list[Skill]
+    ) -> DifficultyAttributes:
         """Return what the beatmap is worth once every skill has run.
 
         Args:
             beatmap: The beatmap being rated.
             mods: The mods the score was set with.
             skills: The skills, already fed every object.
-            clock_rate: The rate the beatmap is played at.
         """
         if not beatmap.HitObjects:
-            return TaikoDifficultyAttributes(Mods=list(mods))
+            return TaikoDifficultyAttributes(Mods=mods)
 
-        rhythm, reading, colour, stamina, single_colour_stamina = skills
+        rhythm = next(s for s in skills if isinstance(s, Rhythm))
+        reading = next(s for s in skills if isinstance(s, Reading))
+        colour = next(s for s in skills if isinstance(s, Colour))
+        stamina = next(s for s in skills if isinstance(s, Stamina) and not s.SingleColourStamina)
+        single_colour_stamina = next(s for s in skills if isinstance(s, Stamina) and s.SingleColourStamina)
 
         stamina_difficulty_value = stamina.DifficultyValue()
 
@@ -188,7 +215,7 @@ class TaikoDifficultyCalculator(DifficultyCalculator):
         stamina_difficulty = stamina_skill * skill_rating
 
         return TaikoDifficultyAttributes(
-            Mods=list(mods),
+            Mods=mods,
             StarRating=star_rating,
             MaxCombo=beatmap.GetMaxCombo(),
             MechanicalDifficulty=colour_difficulty + stamina_difficulty,
@@ -202,7 +229,7 @@ class TaikoDifficultyCalculator(DifficultyCalculator):
         )
 
     def _combined_difficulty_value(
-        self, rhythm, reading, colour, stamina
+        self, rhythm: Rhythm, reading: Reading, colour: Colour, stamina: Stamina
     ) -> tuple[float, float]:
         """Return the beatmap's combined rating and how evenly it is spread.
 
@@ -253,10 +280,10 @@ class TaikoDifficultyCalculator(DifficultyCalculator):
 
     def _combine_peaks(
         self,
-        rhythm_peaks: list,
-        reading_peaks: list,
-        colour_peaks: list,
-        stamina_peaks: list,
+        rhythm_peaks: list[float],
+        reading_peaks: list[float],
+        colour_peaks: list[float],
+        stamina_peaks: list[float],
     ) -> list[float]:
         """Fold the four skills' values together, one entry at a time.
 

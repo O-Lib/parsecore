@@ -24,11 +24,20 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Beatmaps.BeatmapConverter import BeatmapConverter
+from parsecore.Rulesets.Mania.Beatmaps.ManiaBeatmapConverter import (
+    ManiaBeatmapConverter,
+)
+from parsecore.Rulesets.Mods.IApplicableToBeatmapConverter import (
+    IApplicableToBeatmapConverter,
+)
 from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Mods.ModType import ModType
 
 
-class ManiaModDualStages(Mod):
+class ManiaModDualStages(Mod, IApplicableToBeatmapConverter):
     """Double the stages, double the fun."""
 
     Name = "Dual Stages"
@@ -36,14 +45,16 @@ class ManiaModDualStages(Mod):
     Description = "Double the stages, double the fun!"
     Type = ModType.Conversion
 
-    def ApplyToBeatmapConverter(self, beatmap_converter) -> None:
+    def ApplyToBeatmapConverter(self, beatmap_converter: BeatmapConverter) -> None:
         """Tell the converter to lay the beatmap across two stages.
 
         Args:
             beatmap_converter: The converter about to run.
         """
+        mania_beatmap = cast(ManiaBeatmapConverter, beatmap_converter)
+
         # A beatmap written for mania keeps the stage it was made for.
-        if beatmap_converter.IsForCurrentRuleset:
+        if mania_beatmap.IsForCurrentRuleset:
             return
 
-        beatmap_converter.Dual = True
+        mania_beatmap.Dual = True

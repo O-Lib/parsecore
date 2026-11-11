@@ -24,10 +24,12 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Rulesets.Mods.IApplicableMod import IApplicableMod
 from parsecore.Rulesets.Mods.ModEasy import DIFFICULTY_RATIO, ModEasy
 
 
-class OsuModEasy(ModEasy):
+class OsuModEasy(ModEasy, IApplicableMod):
     """Larger circles, forgiving drain, less accuracy required, extra lives."""
 
     Description = (
@@ -35,7 +37,7 @@ class OsuModEasy(ModEasy):
         "and extra lives!"
     )
 
-    def ApplyToDifficulty(self, difficulty) -> None:
+    def ApplyToDifficulty(self, difficulty: BeatmapDifficulty) -> None:
         """Halve every difficulty setting, the accuracy window included.
 
         Args:

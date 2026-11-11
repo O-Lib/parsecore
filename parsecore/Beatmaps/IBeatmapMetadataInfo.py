@@ -35,6 +35,7 @@ class IBeatmapMetadataInfo(Protocol):
     TitleUnicode: str
     Artist: str
     ArtistUnicode: str
+    Author: str
     Source: str
     Tags: str
     PreviewTime: int

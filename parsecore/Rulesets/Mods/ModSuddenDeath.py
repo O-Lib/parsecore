@@ -35,4 +35,14 @@ class ModSuddenDeath(Mod):
     Acronym = "SD"
     Description = "Miss and fail."
     Type = ModType.DifficultyIncrease
-    ScoreMultiplier = 1.0
+    Ranked = True
+
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Sudden Death.
+
+        Returns:
+            A list containing incompatible mod classes, including Perfect.
+        """
+        from parsecore.Rulesets.Mods.ModPerfect import ModPerfect
+        return [*super().IncompatibleMods, type(ModPerfect)]

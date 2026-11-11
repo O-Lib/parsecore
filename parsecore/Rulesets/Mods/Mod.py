@@ -24,6 +24,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
+import copy
+
 from parsecore.Rulesets.Mods.ModType import ModType
 
 
@@ -35,8 +37,26 @@ class Mod:
     Description: str = ""
     Type: ModType = ModType.Fun
     ScoreMultiplier: float = 1.0
+    incompatibleMods: list[type] = []
     Ranked: bool = False
-    IncompatibleMods: tuple[str, ...] = ()
+
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with this mod.
+
+        Returns:
+            A list of incompatible mod classes.
+        """
+        return self.incompatibleMods
+
+    def DeepClone(self) -> Mod:
+        """Return a deep copy of this mod.
+
+        Returns:
+            A new Mod instance with identical attributes.
+        """
+        result = copy.deepcopy(self)
+        return result
 
     def __eq__(self, other: object) -> bool:
         """Return whether two mods are the same mod."""

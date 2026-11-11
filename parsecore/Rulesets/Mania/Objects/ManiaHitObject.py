@@ -25,20 +25,17 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Rulesets.Objects.HitObject import HitObject
+from parsecore.Rulesets.Objects.Types.IHasColumn import IHasColumn
+from parsecore.Rulesets.Objects.Types.IHasXPosition import IHasXPosition
 
 
-class ManiaHitObject(HitObject):
+class ManiaHitObject(HitObject, IHasColumn, IHasXPosition):
     """A note in one column of the stage."""
 
-    def __init__(self, start_time: float = 0.0, column: int = 0) -> None:
-        """Create a mania object.
-
-        Args:
-            start_time: The object's time in milliseconds.
-            column: The column it is played in, counted from the left.
-        """
-        super().__init__(start_time)
-        self._column = column
+    def __init__(self) -> None:
+        """Create a mania object."""
+        super().__init__()
+        self._column = 0
 
     @property
     def Column(self) -> int:
@@ -57,16 +54,19 @@ class ManiaHitObject(HitObject):
     @property
     def X(self) -> float:
         """Return the column as a position, which is how osu! writes it out."""
-        return float(self.Column)
+        return self.Column
+
+    @X.setter
+    def X(self, value: float) -> None:
+        """Set the column from an x position.
+
+        Args:
+            value: The x position to set.
+        """
+        self.Column = int(value)
 
     def CreateHitWindows(self):
         """Return the hit windows this object is judged with."""
         from parsecore.Rulesets.Mania.Scoring.ManiaHitWindows import ManiaHitWindows
 
         return ManiaHitWindows()
-
-    def CreateJudgement(self):
-        """Return the judgement this object is scored with."""
-        from parsecore.Rulesets.Mania.Judgements.ManiaJudgement import ManiaJudgement
-
-        return ManiaJudgement()

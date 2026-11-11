@@ -24,40 +24,26 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Legacy.LegacyHitObjectType import LegacyHitObjectType
 from parsecore.Rulesets.Objects.Legacy.ConvertHitObject import ConvertHitObject
+from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
 from parsecore.Utils.Vector2 import Vector2
 
 # The centre of the osu! playfield, where spinners sit.
 PLAYFIELD_CENTRE = Vector2(256, 192)
 
 
-class ConvertSpinner(ConvertHitObject):
+class ConvertSpinner(ConvertHitObject, IHasDuration):
     """An object spun for a duration."""
 
-    def __init__(self, start_time: float = 0.0, end_time: float = 0.0,
-                 position: Vector2 | None = None) -> None:
-        """Create a spinner.
+    def __init__(self) -> None:
+        """Create a spinner."""
 
-        Args:
-            start_time: The spinner's start in milliseconds.
-            end_time: The spinner's end in milliseconds.
-            position: The spinner's centre.
-        """
-        super().__init__(start_time)
-        self.EndTime: float = end_time
-        self.Position: Vector2 = position or PLAYFIELD_CENTRE
+        super().__init__()
+        self.LegacyType = LegacyHitObjectType.Spinner
+        self.Duration: float = 0.0
 
     @property
-    def X(self) -> float:
-        """Return the spinner's x position."""
-        return self.Position.X
-
-    @property
-    def Y(self) -> float:
-        """Return the spinner's y position."""
-        return self.Position.Y
-
-    @property
-    def Duration(self) -> float:
-        """Return how long the spinner lasts."""
-        return self.EndTime - self.StartTime
+    def EndTime(self) -> float:
+        """Return the end time of the spinner in milliseconds."""
+        return self.StartTime + self.Duration

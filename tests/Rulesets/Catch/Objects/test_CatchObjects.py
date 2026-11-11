@@ -25,6 +25,12 @@ SOFTWARE.
 import pytest
 
 from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Rulesets.Catch.Beatmaps.CatchBeatmapConverter import (
+    CatchBeatmapConverter,
+)
+from parsecore.Rulesets.Catch.Beatmaps.CatchBeatmapProcessor import (
+    CatchBeatmapProcessor,
+)
 from parsecore.Rulesets.Catch.Objects.Banana import Banana, BananaShower
 from parsecore.Rulesets.Catch.Objects.Droplet import Droplet, TinyDroplet
 from parsecore.Rulesets.Catch.Objects.Fruit import Fruit
@@ -34,13 +40,16 @@ from parsecore.Rulesets.Catch.UI.Catcher import (
     CalculateScale,
 )
 from parsecore.Rulesets.Catch.UI.CatchPlayfield import WIDTH as PLAYFIELD_WIDTH
+from parsecore.Rulesets.Objects.Types.IHasRepeats import SpanCount
 from parsecore.Utils.Vector2 import f32
 from tests.Rulesets.Catch.conftest import convert, fruits_at
 
 
 def test_a_position_is_kept_at_the_precision_osu_stores_it_in():
     """A position is narrowed to single precision when it is set."""
-    fruit = Fruit(0.0, 1.0 / 3.0)
+    fruit = Fruit()
+    fruit.StartTime = 0.0
+    fruit.X = 1.0 / 3.0
 
     assert fruit.OriginalX == f32(1.0 / 3.0)
     assert fruit.OriginalX != 1.0 / 3.0
@@ -48,7 +57,9 @@ def test_a_position_is_kept_at_the_precision_osu_stores_it_in():
 
 def test_an_offset_position_stays_on_the_playfield():
     """An object nudged past either edge is pulled back onto the playfield."""
-    fruit = Fruit(0.0, 10.0)
+    fruit = Fruit()
+    fruit.StartTime = 0.0
+    fruit.X = 10.0
     fruit.XOffset = -100.0
 
     assert fruit.EffectiveX == 0.0
@@ -61,7 +72,9 @@ def test_an_offset_position_stays_on_the_playfield():
 
 def test_the_offset_is_added_at_single_precision():
     """Position and offset are added before the result is widened."""
-    fruit = Fruit(0.0, 1.0)
+    fruit = Fruit()
+    fruit.StartTime = 0.0
+    fruit.X = 1.0
     fruit.XOffset = 1.0 / 3.0
 
     assert fruit.EffectiveX == f32(f32(1.0) + f32(1.0 / 3.0))
@@ -97,7 +110,10 @@ def test_the_catch_width_narrows_as_the_circle_size_grows(circle_size):
 def test_a_juice_stream_drops_fruit_at_both_ends():
     """A stream that is only long enough for its ends drops exactly two."""
     beatmap = convert("0,192,1000,2,0,L|100:192,1,100\n")
-    stream = beatmap.HitObjects[0]
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor, []
+    )
+    stream = playable_beatmap.HitObjects[0]
 
     assert isinstance(stream, JuiceStream)
 
@@ -110,7 +126,10 @@ def test_a_juice_stream_drops_fruit_at_both_ends():
 def test_a_juice_stream_fills_a_long_gap_with_tiny_droplets():
     """A gap wider than eighty milliseconds is filled with tiny droplets."""
     beatmap = convert("0,192,1000,2,0,L|400:192,1,400\n")
-    stream = beatmap.HitObjects[0]
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor, []
+    )
+    stream = playable_beatmap.HitObjects[0]
 
     tiny = [n for n in stream.NestedHitObjects if isinstance(n, TinyDroplet)]
 
@@ -122,18 +141,24 @@ def test_a_juice_stream_fills_a_long_gap_with_tiny_droplets():
 def test_a_repeated_juice_stream_drops_fruit_at_every_node():
     """Each end and repeat of a stream drops a fruit."""
     beatmap = convert("0,192,1000,2,0,L|100:192,3,100\n")
-    stream = beatmap.HitObjects[0]
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor, []
+    )
+    stream = playable_beatmap.HitObjects[0]
 
     fruit = [n for n in stream.NestedHitObjects if isinstance(n, Fruit)]
 
-    assert stream.SpanCount == 3
+    assert SpanCount(stream) == 3
     assert len(fruit) == 4
 
 
 def test_a_banana_shower_drops_bananas_across_the_playfield():
     """A shower fills its duration with bananas at scattered positions."""
     beatmap = convert("256,192,1000,12,0,3000\n")
-    shower = beatmap.HitObjects[0]
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor, []
+    )
+    shower = playable_beatmap.HitObjects[0]
 
     assert isinstance(shower, BananaShower)
 
@@ -150,6 +175,9 @@ def test_a_tiny_droplet_is_still_a_droplet():
 def test_a_fruit_falls_where_the_beatmap_put_it():
     """A plain circle becomes a fruit at the same position."""
     beatmap = convert(fruits_at(100.0, 200.0, 300.0))
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor, []
+    )
 
-    assert [h.EffectiveX for h in beatmap.HitObjects] == [100.0, 200.0, 300.0]
-    assert all(isinstance(h, Fruit) for h in beatmap.HitObjects)
+    assert [h.EffectiveX for h in playable_beatmap.HitObjects] == [100.0, 200.0, 300.0]
+    assert all(isinstance(h, Fruit) for h in playable_beatmap.HitObjects)

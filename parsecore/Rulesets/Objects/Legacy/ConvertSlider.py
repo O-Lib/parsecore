@@ -24,34 +24,41 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
+from parsecore.Beatmaps.Legacy.LegacyHitObjectType import LegacyHitObjectType
 from parsecore.Rulesets.Objects.Legacy.ConvertHitObject import ConvertHitObject
 from parsecore.Rulesets.Objects.SliderPath import SliderPath
-from parsecore.Utils.Vector2 import Vector2
+from parsecore.Rulesets.Objects.Types.IHasGenerateTicks import IHasGenerateTicks
+from parsecore.Rulesets.Objects.Types.IHasPathWithRepeats import IHasPathWithRepeats
+from parsecore.Rulesets.Objects.Types.IHasRepeats import SpanCount
+from parsecore.Rulesets.Objects.Types.IHasSliderVelocity import IHasSliderVelocity
+
+if TYPE_CHECKING:
+    from parsecore.Audio.HitSampleInfo import HitSampleInfo
 
 # The distance a slider covers per beat before the slider multiplier.
 BASE_SCORING_DISTANCE = 100.0
 
 
-class ConvertSlider(ConvertHitObject):
+class ConvertSlider(ConvertHitObject, IHasPathWithRepeats, IHasSliderVelocity, IHasGenerateTicks):
     """A path the player follows, possibly repeating."""
 
-    def __init__(self, start_time: float = 0.0, position: Vector2 | None = None) -> None:
-        """Create a slider.
+    def __init__(self) -> None:
+        """Create a slider."""
 
-        Args:
-            start_time: The object's time in milliseconds.
-            position: The slider head's position.
-        """
-        super().__init__(start_time)
-        self.Position: Vector2 = position or Vector2()
+        super().__init__()
         self.Path: SliderPath = SliderPath()
         self.RepeatCount: int = 0
-        self.NodeSamples: list[list] = []
+        self.NodeSamples: list[list[HitSampleInfo]] = []
         self.SliderVelocityMultiplier: float = 1.0
         self.GenerateTicks: bool = True
         self.Velocity: float = 1.0
+        self.LegacyType = LegacyHitObjectType.Slider
 
-    def ApplyDefaultsToSelf(self, control_point_info, difficulty) -> None:
+    def ApplyDefaultsToSelf(self, control_point_info: ControlPointInfo, difficulty: BeatmapDifficulty) -> None:
         """Read slider velocity and tick generation from the difficulty point.
 
         Legacy beatmaps carry both as control points rather than on the object.
@@ -62,14 +69,6 @@ class ConvertSlider(ConvertHitObject):
         """
         super().ApplyDefaultsToSelf(control_point_info, difficulty)
 
-        difficulty_point_at = getattr(control_point_info, "DifficultyPointAt", None)
-        if difficulty_point_at is None:
-            return
-
-        point = difficulty_point_at(self.StartTime)
-        self.SliderVelocityMultiplier = point.SliderVelocity
-        self.GenerateTicks = point.GenerateTicks
-
         timing_point = control_point_info.TimingPointAt(self.StartTime)
         scoring_distance = (
             BASE_SCORING_DISTANCE
@@ -79,29 +78,14 @@ class ConvertSlider(ConvertHitObject):
         self.Velocity = scoring_distance / timing_point.BeatLength
 
     @property
-    def X(self) -> float:
-        """Return the slider head's x position."""
-        return self.Position.X
-
-    @property
-    def Y(self) -> float:
-        """Return the slider head's y position."""
-        return self.Position.Y
-
-    @property
     def Distance(self) -> float:
         """Return the length of one span of the slider."""
         return self.Path.Distance
 
     @property
-    def SpanCount(self) -> int:
-        """Return how many times the slider is traversed."""
-        return self.RepeatCount + 1
-
-    @property
     def Duration(self) -> float:
         """Return how long the slider takes to follow."""
-        return self.SpanCount * self.Distance / self.Velocity
+        return SpanCount(self) * self.Distance / self.Velocity
 
     @property
     def EndTime(self) -> float:

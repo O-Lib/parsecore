@@ -25,16 +25,30 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
-from parsecore.Rulesets.Osu.Difficulty.OsuLegacyScoreSimulator import (
-    GetLegacyScoreMultiplier,
+from parsecore.Rulesets.Mods.ModScoreV2 import ModScoreV2
+from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyAttributes import (
+    OsuDifficultyAttributes,
 )
+from parsecore.Rulesets.Osu.Mods.OsuModAutopilot import OsuModAutopilot
+from parsecore.Rulesets.Osu.Mods.OsuModDaycore import OsuModDaycore
+from parsecore.Rulesets.Osu.Mods.OsuModDoubleTime import OsuModDoubleTime
+from parsecore.Rulesets.Osu.Mods.OsuModEasy import OsuModEasy
+from parsecore.Rulesets.Osu.Mods.OsuModFlashlight import OsuModFlashlight
+from parsecore.Rulesets.Osu.Mods.OsuModHalfTime import OsuModHalfTime
+from parsecore.Rulesets.Osu.Mods.OsuModHardRock import OsuModHardRock
+from parsecore.Rulesets.Osu.Mods.OsuModHidden import OsuModHidden
+from parsecore.Rulesets.Osu.Mods.OsuModNightcore import OsuModNightcore
+from parsecore.Rulesets.Osu.Mods.OsuModNoFail import OsuModNoFail
+from parsecore.Rulesets.Osu.Mods.OsuModRelax import OsuModRelax
+from parsecore.Rulesets.Osu.Mods.OsuModSpunOut import OsuModSpunOut
 from parsecore.Rulesets.Scoring.HitResult import HitResult
+from parsecore.Scoring.ScoreInfo import ScoreInfo
 
 
 class OsuLegacyScoreMissCalculator:
     """Estimates the combo breaks behind an osu!stable score."""
 
-    def __init__(self, score, attributes) -> None:
+    def __init__(self, score: ScoreInfo, attributes: OsuDifficultyAttributes) -> None:
         """Create the calculator for one score.
 
         Args:
@@ -46,14 +60,11 @@ class OsuLegacyScoreMissCalculator:
 
     def Calculate(self) -> float:
         """Return how many combo breaks the score most likely hid."""
-        legacy_total_score = getattr(self._score, "LegacyTotalScore", None)
 
-        if self._attributes.MaxCombo == 0 or legacy_total_score is None:
+        if self._attributes.MaxCombo == 0 or self._score.LegacyTotalScore is None or self._score.LegacyTotalScore == 0:
             return 0.0
 
-        score_v1_multiplier = self._attributes.LegacyScoreBaseMultiplier * (
-            GetLegacyScoreMultiplier(list(self._score.Mods))
-        )
+        score_v1_multiplier = self._attributes.LegacyScoreBaseMultiplier * self._getLegacyScoreMultiplier()
         relevant_combo_per_object = self._relevant_score_combo_per_object()
 
         maximum_miss_count = self._maximum_combo_based_miss_count()
@@ -61,7 +72,7 @@ class OsuLegacyScoreMissCalculator:
         score_obtained_during_max_combo = self._score_at_combo(
             self._score.MaxCombo, relevant_combo_per_object, score_v1_multiplier
         )
-        remaining_score = legacy_total_score - score_obtained_during_max_combo
+        remaining_score = self._score.LegacyTotalScore - score_obtained_during_max_combo
 
         if remaining_score <= 0:
             return maximum_miss_count
@@ -106,8 +117,7 @@ class OsuLegacyScoreMissCalculator:
                 2 * (relevant_combo_per_object - 1)
                 + (estimated_objects - 1) * relevant_combo_per_object
             )
-            * estimated_objects
-            / 2
+            * estimated_objects / 2
             if relevant_combo_per_object > 0
             else 0.0
         )
@@ -198,3 +208,32 @@ class OsuLegacyScoreMissCalculator:
             miss_count = count_miss + max_possible_slider_breaks
 
         return miss_count
+
+    def _getLegacyScoreMultiplier(self) -> float:
+        """Return what the mods multiply an osu!stable score by."""
+
+        score_v2 = any(isinstance(m, ModScoreV2) for m in self._score.Mods)
+
+        multiplier = 1.0
+
+        for mod in self._score.Mods:
+            if isinstance(mod, OsuModNoFail):
+                multiplier *= 1.0 if score_v2 else 0.5
+            elif isinstance(mod, OsuModEasy):
+                multiplier *= 0.5
+            elif isinstance(mod, (OsuModHalfTime, OsuModDaycore)):
+                multiplier *= 0.3
+            elif isinstance(mod, OsuModHidden):
+                multiplier *= 1.06
+            elif isinstance(mod, OsuModHardRock):
+                multiplier *= 1.10 if score_v2 else 1.06
+            elif isinstance(mod, (OsuModDoubleTime, OsuModNightcore)):
+                multiplier *= 1.20 if score_v2 else 1.12
+            elif isinstance(mod, OsuModFlashlight):
+                multiplier *= 1.12
+            elif isinstance(mod, OsuModSpunOut):
+                multiplier *= 0.9
+            elif isinstance(mod, (OsuModRelax, OsuModAutopilot)):
+                return 0.0
+
+        return multiplier

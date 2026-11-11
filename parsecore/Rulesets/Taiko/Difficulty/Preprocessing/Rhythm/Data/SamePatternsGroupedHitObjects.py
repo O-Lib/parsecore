@@ -24,11 +24,20 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Rhythm.Data.SameRhythmHitObjectGrouping import (
+    SameRhythmHitObjectGrouping,
+)
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+    TaikoDifficultyHitObject,
+)
+
 
 class SamePatternsGroupedHitObjects:
     """Rhythm groups that repeat at a steady spacing."""
 
-    def __init__(self, previous, groups: list) -> None:
+    def __init__(
+            self, previous: SamePatternsGroupedHitObjects | None, groups: list[SameRhythmHitObjectGrouping]
+    ) -> None:
         """Group rhythm groups that recur evenly.
 
         Args:
@@ -56,11 +65,11 @@ class SamePatternsGroupedHitObjects:
         return self.GroupInterval / self.Previous.GroupInterval
 
     @property
-    def FirstHitObject(self):
+    def FirstHitObject(self) -> TaikoDifficultyHitObject:
         """Return the note the pattern opens on."""
         return self.Groups[0].FirstHitObject
 
     @property
-    def AllHitObjects(self) -> list:
+    def AllHitObjects(self) -> list[TaikoDifficultyHitObject]:
         """Return every note across this pattern's rhythm groups."""
         return [h for group in self.Groups for h in group.HitObjects]

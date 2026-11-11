@@ -31,4 +31,4 @@ from typing import Protocol, runtime_checkable
 class IHasSliderVelocity(Protocol):
     """An object carrying its own slider velocity multiplier."""
 
-    slider_velocity_multiplier: float
+    SliderVelocityMultiplier: float

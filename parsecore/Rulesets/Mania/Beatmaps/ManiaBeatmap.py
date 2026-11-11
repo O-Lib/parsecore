@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from parsecore.Beatmaps.Beatmap import Beatmap
 from parsecore.Rulesets.Mania.Beatmaps.StageDefinition import StageDefinition
+from parsecore.Rulesets.Mania.Objects.HoldNote import HoldNote
+from parsecore.Rulesets.Mania.Objects.Note import Note
 
 
 class ManiaBeatmap(Beatmap):
@@ -39,6 +41,16 @@ class ManiaBeatmap(Beatmap):
         """
         super().__init__()
         self.Stages: list[StageDefinition] = [default_stage]
+
+    @property
+    def NotesCount(self) -> int:
+        """Return the number of normal notes in the beatmap."""
+        return sum(1 for h in self.HitObjects if isinstance(h, Note))
+
+    @property
+    def HoldNotesCount(self) -> int:
+        """Return the number of hold notes in the beatmap."""
+        return sum(1 for h in self.HitObjects if isinstance(h, HoldNote))
 
     @property
     def TotalColumns(self) -> int:

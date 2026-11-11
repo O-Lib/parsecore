@@ -24,8 +24,18 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Osu.Difficulty.Preprocessing.OsuDifficultyHitObject import (
+    OsuDifficultyHitObject,
+)
 from parsecore.Rulesets.Osu.Mods.OsuModHidden import OsuModHidden
+from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 from parsecore.Rulesets.Osu.Objects.Slider import Slider
 from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
 
@@ -39,7 +49,7 @@ MIN_ANGLE_MULTIPLIER = 0.2
 HISTORY_LENGTH = 10
 
 
-def EvaluateDifficultyOf(current, mods: list) -> float:
+def EvaluateDifficultyOf(current: DifficultyHitObject, mods: list[Mod]) -> float:
     """Return the flashlight difficulty of reading up to ``current``.
 
     Args:
@@ -52,8 +62,8 @@ def EvaluateDifficultyOf(current, mods: list) -> float:
     if isinstance(current.BaseObject, Spinner):
         return 0.0
 
-    osu_current = current
-    osu_hit_object = osu_current.BaseObject
+    osu_current = cast(OsuDifficultyHitObject, current)
+    osu_hit_object = cast(OsuHitObject, osu_current.BaseObject)
 
     scaling_factor = 52.0 / osu_hit_object.Radius
 
@@ -64,15 +74,12 @@ def EvaluateDifficultyOf(current, mods: list) -> float:
     last_obj = osu_current
     angle_repeat_count = 0.0
 
-    hidden_mods = [m for m in mods if isinstance(m, OsuModHidden)]
-    hidden_fades_objects = any(
-        not getattr(m, "OnlyFadeApproachCircles", False) for m in hidden_mods
-    )
+    hidden = any(not m.OnlyFadeApproachCircles for m in mods if isinstance(m, OsuModHidden))
 
     # Walk backwards in time from the current object.
     for i in range(min(current.Index, HISTORY_LENGTH)):
-        current_obj = current.Previous(i)
-        current_hit_object = current_obj.BaseObject
+        current_obj = cast(OsuDifficultyHitObject, current.Previous(i))
+        current_hit_object = cast(OsuHitObject, current_obj.BaseObject)
 
         cumulative_strain_time += last_obj.AdjustedDeltaTime
 
@@ -93,7 +100,7 @@ def EvaluateDifficultyOf(current, mods: list) -> float:
             opacity_bonus = 1.0 + MAX_OPACITY_BONUS * (
                 1.0
                 - osu_current.OpacityAt(
-                    current_hit_object.StartTime, hidden_fades_objects
+                    current_hit_object.StartTime, hidden
                 )
             )
 
@@ -115,7 +122,7 @@ def EvaluateDifficultyOf(current, mods: list) -> float:
     flashlight_difficulty = DiffUtils.Pow(small_dist_nerf * flashlight_difficulty, 2)
 
     # Hidden removes the approach circles, so there is more to remember.
-    if hidden_mods:
+    if hidden:
         flashlight_difficulty *= 1.0 + HIDDEN_BONUS
 
     flashlight_difficulty *= MIN_ANGLE_MULTIPLIER + (1.0 - MIN_ANGLE_MULTIPLIER) / (

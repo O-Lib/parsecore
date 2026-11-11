@@ -34,43 +34,49 @@ from parsecore.Rulesets.Mania.Objects.HoldNote import (
     HoldNote,
 )
 from parsecore.Rulesets.Mania.Objects.Note import Note
+from parsecore.Rulesets.Objects.Legacy.IHasLegacyHitObjectType import (
+    IHasLegacyHitObjectType,
+)
+from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
+from parsecore.Rulesets.Objects.Types.IHasPath import IHasPath
+from parsecore.Rulesets.Objects.Types.IHasRepeats import IHasRepeats
+from parsecore.Rulesets.Objects.Types.IHasXPosition import IHasXPosition
 
 
 class PassThroughPatternGenerator(LegacyPatternGenerator):
     """Turns one object into one note, in the column the beatmap named."""
 
-    def Generate(self) -> list:
+    def Generate(self) -> list[Pattern]:
         """Return the single pattern for this object."""
-        column = self.GetColumn(getattr(self.HitObject, "X", 0.0))
+        position = self.HitObject.X if isinstance(self.HitObject, IHasXPosition) else 0.0
+        column = self.GetColumn(position)
 
         pattern = Pattern()
-        duration = getattr(self.HitObject, "Duration", None)
-
-        if duration is None and hasattr(self.HitObject, "EndTime"):
-            duration = self.HitObject.EndTime - self.HitObject.StartTime
-
-        if duration is not None:
-            legacy_type = getattr(self.HitObject, "LegacyType", None)
+        if isinstance(self.HitObject, IHasDuration):
+            duration = self.HitObject.Duration
+            legacy_type = isinstance(self.HitObject, IHasLegacyHitObjectType)
             play_sliding_samples = (
-                legacy_type is not None
-                and legacy_type & LegacyHitObjectType.Slider
-            ) or hasattr(self.HitObject, "Path")
+                legacy_type and legacy_type & LegacyHitObjectType.Slider
+            ) or isinstance(self.HitObject, IHasPath)
 
-            node_samples = getattr(self.HitObject, "NodeSamples", None)
-            if not node_samples:
-                node_samples = CreateDefaultNodeSamples(self.HitObject)
-
-            hold = HoldNote(
-                self.HitObject.StartTime,
-                column,
-                duration,
-                play_sliding_samples=bool(play_sliding_samples),
-                node_samples=node_samples,
+            node_samples = (
+                self.HitObject.NodeSamples
+                if isinstance(self.HitObject, IHasRepeats)
+                else CreateDefaultNodeSamples(self.HitObject)
             )
+
+            hold = HoldNote()
+            hold.StartTime = self.HitObject.StartTime
+            hold.Duration = duration
+            hold.Column = column
             hold.Samples = self.HitObject.Samples
+            hold.PlaySlidingSamples = play_sliding_samples
+            hold.NodeSamples = node_samples
             pattern.Add(hold)
         else:
-            note = Note(self.HitObject.StartTime, column)
+            note = Note()
+            note.StartTime = self.HitObject.StartTime
+            note.Column = column
             note.Samples = self.HitObject.Samples
             pattern.Add(note)
 

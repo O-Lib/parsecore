@@ -24,33 +24,36 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
+from parsecore.Rulesets.Objects.HitObject import HitObject
 from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.TaikoColourData import (
     TaikoColourData,
 )
 from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Rhythm.TaikoRhythmData import (
     TaikoRhythmData,
 )
+from parsecore.Rulesets.Taiko.Difficulty.Utils.IHasInterval import IHasInterval
 from parsecore.Rulesets.Taiko.Objects.Hit import Hit
 from parsecore.Rulesets.Taiko.Objects.HitType import HitType
 
 
-class TaikoDifficultyHitObject(DifficultyHitObject):
+class TaikoDifficultyHitObject(DifficultyHitObject, IHasInterval):
     """A note with its place in the beatmap's colour and rhythm patterns."""
 
     def __init__(
         self,
-        hit_object,
-        last_object,
+        hit_object: HitObject,
+        last_object: HitObject,
         clock_rate: float,
         objects: list,
-        centre_hit_objects: list,
-        rim_hit_objects: list,
-        note_objects: list,
+        centre_hit_objects: list[TaikoDifficultyHitObject],
+        rim_hit_objects: list[TaikoDifficultyHitObject],
+        note_objects: list[TaikoDifficultyHitObject],
         index: int,
-        control_point_info,
+        control_point_info: ControlPointInfo,
         global_slider_velocity: float,
     ) -> None:
         """Create a difficulty object and file it under the runs it belongs to.
@@ -70,7 +73,7 @@ class TaikoDifficultyHitObject(DifficultyHitObject):
         super().__init__(hit_object, last_object, clock_rate, objects, index)
 
         self._note_difficulty_hit_objects = note_objects
-        self._mono_difficulty_hit_objects: list | None = None
+        self._mono_difficulty_hit_objects: list[TaikoDifficultyHitObject] | None = None
         self.MonoIndex: int = 0
         self.NoteIndex: int = 0
 
@@ -106,7 +109,12 @@ class TaikoDifficultyHitObject(DifficultyHitObject):
 
         self.EffectiveBPM: float = current_control_point.BPM * current_slider_velocity
 
-    def PreviousMono(self, backwards_index: int):
+    @property
+    def Interval(self) -> float:
+        """Return the time interval (delta time) from the previous hit object."""
+        return self.DeltaTime
+
+    def PreviousMono(self, backwards_index: int) -> TaikoDifficultyHitObject | None:
         """Return an earlier note of this note's own colour.
 
         Args:
@@ -128,7 +136,7 @@ class TaikoDifficultyHitObject(DifficultyHitObject):
             self.MonoIndex + (forwards_index + 1),
         )
 
-    def PreviousNote(self, backwards_index: int):
+    def PreviousNote(self, backwards_index: int) -> TaikoDifficultyHitObject | None:
         """Return an earlier note, of either colour.
 
         Args:
@@ -139,7 +147,7 @@ class TaikoDifficultyHitObject(DifficultyHitObject):
             self.NoteIndex - (backwards_index + 1),
         )
 
-    def NextNote(self, forwards_index: int):
+    def NextNote(self, forwards_index: int) -> TaikoDifficultyHitObject | None:
         """Return a later note, of either colour.
 
         Args:
@@ -150,14 +158,9 @@ class TaikoDifficultyHitObject(DifficultyHitObject):
             self.NoteIndex + (forwards_index + 1),
         )
 
-    @property
-    def Interval(self) -> float:
-        """Return the gap to the object before this one."""
-        return self.DeltaTime
-
 
 def _calculate_slider_velocity(
-    control_point_info,
+    control_point_info: ControlPointInfo,
     global_slider_velocity: float,
     start_time: float,
     clock_rate: float,

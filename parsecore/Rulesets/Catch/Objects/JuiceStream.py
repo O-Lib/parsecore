@@ -24,6 +24,9 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Audio.HitSampleInfo import HitSampleInfo
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
 from parsecore.Rulesets.Catch.Objects.CatchHitObject import CatchHitObject
 from parsecore.Rulesets.Catch.Objects.Droplet import Droplet, TinyDroplet
 from parsecore.Rulesets.Catch.Objects.Fruit import Fruit
@@ -34,7 +37,15 @@ from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
 from parsecore.Rulesets.Objects.PathControlPoint import PathControlPoint
 from parsecore.Rulesets.Objects.SliderEventGenerator import SliderEventType
 from parsecore.Rulesets.Objects.SliderPath import SliderPath
+from parsecore.Rulesets.Objects.Types.IHasPathWithRepeats import IHasPathWithRepeats
+from parsecore.Rulesets.Objects.Types.IHasRepeats import (
+    GetNodeSamples,
+    PopulateNodeSamples,
+    SpanCount,
+)
+from parsecore.Rulesets.Objects.Types.IHasSliderVelocity import IHasSliderVelocity
 from parsecore.Rulesets.Scoring.EmptyHitWindows import EmptyHitWindows
+from parsecore.Utils.Precision import Clamp
 
 # The distance a stream covers per beat before the slider multiplier.
 BASE_SCORING_DISTANCE = 100.0
@@ -46,25 +57,29 @@ TINY_DROPLET_THRESHOLD = 80.0
 MAX_TINY_DROPLET_SPACING = 100.0
 
 
-class JuiceStream(CatchHitObject):
+class JuiceStream(CatchHitObject, IHasPathWithRepeats, IHasSliderVelocity):
     """A slider's path, dropping fruit and droplets along its length."""
 
-    def __init__(self, start_time: float = 0.0, x: float = 0.0) -> None:
-        """Create a juice stream.
-
-        Args:
-            start_time: The stream's start in milliseconds.
-            x: Where the beatmap places its head.
-        """
-        super().__init__(start_time, x)
-        self._path = SliderPath()
+    def __init__(self) -> None:
+        """Create a juice stream."""
+        super().__init__()
+        self._path: SliderPath = SliderPath()
         self.RepeatCount: int = 0
-        self.NodeSamples: list[list] = []
+        self.NodeSamples: list[list[HitSampleInfo]] = []
 
         self.Velocity: float = 0.0
         self.TickDistance: float = 0.0
         self.TickDistanceMultiplier: float = 1.0
-        self.SliderVelocityMultiplier: float = 1.0
+        self.sliderVelocityMultiplier: float = 1.0
+
+    @property
+    def SliderVelocityMultiplier(self) -> float:
+        """Return the slider velocity multiplier for this stream."""
+        return self.sliderVelocityMultiplier
+    
+    @SliderVelocityMultiplier.setter
+    def SliderVelocityMultiplier(self, value: float) -> None:
+        self.sliderVelocityMultiplier = Clamp(value, 0.1, 10.0)
 
     @property
     def Path(self) -> SliderPath:
@@ -78,6 +93,7 @@ class JuiceStream(CatchHitObject):
         Args:
             value: The path to copy from.
         """
+        self._path.ControlPoints.clear()
         self._path.ControlPoints = [
             PathControlPoint(cp.Position, cp.Type) for cp in value.ControlPoints
         ]
@@ -97,14 +113,12 @@ class JuiceStream(CatchHitObject):
     @property
     def Duration(self) -> float:
         """Return how long the stream lasts."""
-        if self.Velocity == 0:
-            return 0.0
-        return self.SpanCount * self.Path.Distance / self.Velocity
+        return SpanCount(self) * self.Path.Distance / self.Velocity
 
     @property
     def SpanDuration(self) -> float:
         """Return how long one traversal of the path takes."""
-        return self.Duration / self.SpanCount
+        return self.Duration / SpanCount(self)
 
     @property
     def EndTime(self) -> float:
@@ -114,9 +128,9 @@ class JuiceStream(CatchHitObject):
     @property
     def EndX(self) -> float:
         """Return where the stream finishes across the playfield."""
-        return self.EffectiveX + self.Path.PositionAt(1.0).X
+        return self.EffectiveX + self.CurvePositionAt(1).X
 
-    def ApplyDefaultsToSelf(self, control_point_info, difficulty) -> None:
+    def ApplyDefaultsToSelf(self, control_point_info: ControlPointInfo, difficulty: BeatmapDifficulty) -> None:
         """Derive the stream's velocity and tick spacing from the beatmap.
 
         Args:
@@ -143,11 +157,12 @@ class JuiceStream(CatchHitObject):
     def CreateNestedHitObjects(self) -> None:
         """Drop the fruit and droplets the stream is made of."""
         super().CreateNestedHitObjects()
+        PopulateNodeSamples(self)
 
         droplet_samples = [s.With(Name="slidertick") for s in self.Samples]
 
         node_index = 0
-        last_event = None
+        last_event: SliderEventGenerator.SliderEventDescriptor | None = None
 
         for event in SliderEventGenerator.Generate(
             self.StartTime,
@@ -155,74 +170,47 @@ class JuiceStream(CatchHitObject):
             self.Velocity,
             self.TickDistance,
             self.Path.Distance,
-            self.SpanCount,
+            SpanCount(self),
         ):
             if last_event is not None:
                 # osu! measures this gap in whole milliseconds.
                 since_last_tick = int(event.Time) - int(last_event.Time)
 
                 if since_last_tick > TINY_DROPLET_THRESHOLD:
-                    self._fill_with_tiny_droplets(last_event, event, since_last_tick)
+                    time_between_tiny = since_last_tick
+                    while time_between_tiny > 100:
+                        time_between_tiny /= 2
+
+                    t = time_between_tiny
+                    while t < since_last_tick:
+                        tiny_droplet = TinyDroplet()
+                        tiny_droplet.StartTime = t + last_event.Time
+                        tiny_droplet.X = self.EffectiveX + self.Path.PositionAt(
+                            last_event.PathProgress + (t / since_last_tick)
+                            * (event.PathProgress - last_event.PathProgress)
+                        ).X
+                        self.AddNested(tiny_droplet)
+                        t += time_between_tiny
 
             last_event = event
 
             if event.Type == SliderEventType.Tick:
-                droplet = Droplet(
-                    event.Time,
-                    self.EffectiveX + self.Path.PositionAt(event.PathProgress).X,
-                )
-                droplet.Samples = list(droplet_samples)
+                droplet = Droplet()
+                droplet.StartTime = event.Time
+                droplet.X = self.EffectiveX + self.Path.PositionAt(event.PathProgress).X
+                droplet.Samples = droplet_samples
                 self.AddNested(droplet)
             elif event.Type in (
                 SliderEventType.Head,
                 SliderEventType.Tail,
                 SliderEventType.Repeat,
             ):
-                fruit = Fruit(
-                    event.Time,
-                    self.EffectiveX + self.Path.PositionAt(event.PathProgress).X,
-                )
-                fruit.Samples = self._node_samples(node_index)
+                fruit = Fruit()
+                fruit.StartTime = event.Time
+                fruit.X = self.EffectiveX + self.Path.PositionAt(event.PathProgress).X
+                fruit.Samples = GetNodeSamples(self, node_index)
                 node_index += 1
                 self.AddNested(fruit)
-
-    def _fill_with_tiny_droplets(self, last_event, event, since_last_tick: int) -> None:
-        """Fill a gap between two ticks with evenly spaced tiny droplets.
-
-        The spacing is halved until it falls under a tenth of a second, so a
-        long gap is filled more densely than a short one.
-
-        Args:
-            last_event: The event opening the gap.
-            event: The event closing it.
-            since_last_tick: How long the gap is, in whole milliseconds.
-        """
-        spacing = float(since_last_tick)
-        while spacing > MAX_TINY_DROPLET_SPACING:
-            spacing /= 2
-
-        time = spacing
-        while time < since_last_tick:
-            progress = last_event.PathProgress + (time / since_last_tick) * (
-                event.PathProgress - last_event.PathProgress
-            )
-            self.AddNested(
-                TinyDroplet(
-                    time + last_event.Time,
-                    self.EffectiveX + self.Path.PositionAt(progress).X,
-                )
-            )
-            time += spacing
-
-    def _node_samples(self, index: int) -> list:
-        """Return the samples for one end or repeat of the stream.
-
-        Args:
-            index: Which node to read.
-        """
-        if index < len(self.NodeSamples):
-            return list(self.NodeSamples[index])
-        return list(self.Samples)
 
     def CreateJudgement(self):
         """Return the judgement this object is scored with."""

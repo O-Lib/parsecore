@@ -24,6 +24,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Rulesets.Mods.IApplicableToDifficulty import IApplicableToDifficulty
 from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Mods.ModType import ModType
 from parsecore.Utils.Vector2 import f32
@@ -33,7 +35,7 @@ from parsecore.Utils.Vector2 import f32
 ADJUST_RATIO = f32(1.4)
 
 
-class ModHardRock(Mod):
+class ModHardRock(Mod, IApplicableToDifficulty):
     """Everything just got a bit harder..."""
 
     Name = "Hard Rock"
@@ -42,9 +44,18 @@ class ModHardRock(Mod):
     Type = ModType.DifficultyIncrease
     ScoreMultiplier = 1.06
     Ranked = True
-    IncompatibleMods = ("EZ", "DA")
 
-    def ApplyToDifficulty(self, difficulty) -> None:
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Hard Rock.
+
+        Returns:
+            A list containing the Easy mod class.
+        """
+        from parsecore.Rulesets.Mods.ModEasy import ModEasy
+        return [type(ModEasy)]
+
+    def ApplyToDifficulty(self, difficulty: BeatmapDifficulty) -> None:
         """Raise the drain rate, capped at ten.
 
         Args:

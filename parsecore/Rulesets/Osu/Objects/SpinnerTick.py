@@ -30,14 +30,9 @@ from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 class SpinnerTick(OsuHitObject):
     """One of the rotations required to complete a spinner."""
 
-    def __init__(self, start_time: float = 0.0, position=None) -> None:
-        """Create a spinner tick.
-
-        Args:
-            start_time: The tick's time in milliseconds.
-            position: The tick's position.
-        """
-        super().__init__(start_time, position)
+    def __init__(self) -> None:
+        """Create a spinner tick."""
+        super().__init__()
         self.SpinnerDuration: float = 0.0
 
     @property

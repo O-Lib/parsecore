@@ -24,6 +24,9 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
+from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Scoring.Legacy.LegacyScoreAttributes import (
     LegacyScoreAttributes,
 )
@@ -32,20 +35,20 @@ from parsecore.Rulesets.Scoring.Legacy.LegacyScoreAttributes import (
 class ILegacyScoreSimulator:
     """Simulates a perfect play under osu!stable's first scoring system."""
 
-    def Simulate(self, beatmap, playable_beatmap) -> LegacyScoreAttributes:
+    def Simulate(self, workingBeatmap: WorkingBeatmap, playable_beatmap: Beatmap) -> LegacyScoreAttributes:
         """Return the highest score a beatmap allows.
 
         Args:
-            beatmap: The beatmap as it was decoded.
+            workingBeatmap: The beatmap as it was decoded.
             playable_beatmap: The same beatmap as this ruleset plays it.
         """
         raise NotImplementedError
 
-    def GetLegacyScoreMultiplier(self, mods: list, difficulty) -> float:
+    @staticmethod
+    def GetLegacyScoreMultiplier(mods: list[Mod]) -> float:
         """Return what the mods multiply an osu!stable score by.
 
         Args:
             mods: The mods the score was set with.
-            difficulty: The settings the beatmap was converted against.
         """
         raise NotImplementedError

@@ -24,14 +24,20 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Beatmaps.BeatmapConverter import BeatmapConverter
+from parsecore.Rulesets.Mania.Beatmaps.ManiaBeatmapConverter import (
+    ManiaBeatmapConverter,
+)
+from parsecore.Rulesets.Mods.IApplicableToBeatmapConverter import (
+    IApplicableToBeatmapConverter,
+)
 from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Mods.ModType import ModType
 
-# The acronyms of every key mod, which are all incompatible with each other.
-KEY_MOD_ACRONYMS = ("1K", "2K", "3K", "4K", "5K", "6K", "7K", "8K", "9K", "10K")
 
-
-class ManiaKeyMod(Mod):
+class ManiaKeyMod(Mod, IApplicableToBeatmapConverter):
     """Converts a beatmap onto a fixed number of columns."""
 
     KeyCount = 0
@@ -39,21 +45,28 @@ class ManiaKeyMod(Mod):
     Ranked = True
 
     @property
-    def IncompatibleMods(self) -> tuple:
-        """Return the mods this one cannot be played with."""
-        return tuple(a for a in KEY_MOD_ACRONYMS if a != self.Acronym)
+    def Acronym(self) -> str:
+        """Return the acronym of the key mod."""
+        return self.Name
 
-    def ApplyToBeatmapConverter(self, beatmap_converter) -> None:
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the mods this one cannot be played with."""
+        return KEY_MODS
+
+    def ApplyToBeatmapConverter(self, beatmap_converter: BeatmapConverter) -> None:
         """Tell the converter how many columns to aim for.
 
         Args:
             beatmap_converter: The converter about to run.
         """
+        mania_beatmap = cast(ManiaBeatmapConverter, beatmap_converter)
+
         # A beatmap written for mania keeps the columns it was made with.
-        if beatmap_converter.IsForCurrentRuleset:
+        if mania_beatmap.IsForCurrentRuleset:
             return
 
-        beatmap_converter.TargetColumns = self.KeyCount
+        mania_beatmap.TargetColumns = self.KeyCount
 
 
 class ManiaModKey1(ManiaKeyMod):
@@ -144,3 +157,17 @@ class ManiaModKey10(ManiaKeyMod):
     Acronym = "10K"
     Description = "Play with ten keys."
     KeyCount = 10
+
+
+KEY_MODS = [
+    ManiaModKey1,
+    ManiaModKey2,
+    ManiaModKey3,
+    ManiaModKey4,
+    ManiaModKey5,
+    ManiaModKey6,
+    ManiaModKey7,
+    ManiaModKey8,
+    ManiaModKey9,
+    ManiaModKey10
+]

@@ -31,4 +31,4 @@ from typing import Protocol, runtime_checkable
 class IHasColumn(Protocol):
     """An object occupying a mania column."""
 
-    column: int
+    Column: int

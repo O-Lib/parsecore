@@ -24,11 +24,17 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Rulesets.Objects.Types.IHasComboInformation import (
+    IHasComboInformation,
+    UpdateComboInformation,
+)
+
 
 class BeatmapProcessor:
     """Runs before and after a beatmap's objects have their defaults applied."""
 
-    def __init__(self, beatmap) -> None:
+    def __init__(self, beatmap: Beatmap) -> None:
         """Create a processor for a beatmap.
 
         Args:
@@ -38,29 +44,12 @@ class BeatmapProcessor:
 
     def PreProcess(self) -> None:
         """Assign combo indices to every object that carries them."""
-        last_obj = None
-        index = 0
-        combo_index = 0
-        force_new_combo = False
+        last_obj: IHasComboInformation | None = None
 
         for obj in self.Beatmap.HitObjects:
-            if not hasattr(obj, "NewCombo"):
-                continue
-
-            if last_obj is None:
-                # The first object always starts a combo.
-                obj.NewCombo = True
-
-            if obj.NewCombo or force_new_combo:
-                index = 0
-                combo_index += 1 + getattr(obj, "ComboOffset", 0)
-                force_new_combo = False
-
-            obj.IndexInCurrentCombo = index
-            obj.ComboIndex = combo_index
-
-            index += 1
-            last_obj = obj
+            if isinstance(obj, IHasComboInformation):
+                UpdateComboInformation(obj, last_obj)
+                last_obj = obj
 
     def PostProcess(self) -> None:
         """Apply any ruleset-specific adjustments after defaults are applied."""

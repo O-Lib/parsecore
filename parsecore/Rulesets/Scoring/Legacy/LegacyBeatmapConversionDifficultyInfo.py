@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from parsecore.Beatmaps.Beatmap import Beatmap
 from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
 
 
@@ -42,7 +43,7 @@ class LegacyBeatmapConversionDifficultyInfo:
     TotalObjectCount: int = 0
 
     @staticmethod
-    def FromBeatmap(beatmap) -> LegacyBeatmapConversionDifficultyInfo:
+    def FromBeatmap(beatmap: Beatmap) -> LegacyBeatmapConversionDifficultyInfo:
         """Return the settings of a decoded beatmap.
 
         Args:

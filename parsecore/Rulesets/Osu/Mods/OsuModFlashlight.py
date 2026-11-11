@@ -25,11 +25,13 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Rulesets.Mods.ModFlashlight import ModFlashlight
+from parsecore.Rulesets.Osu.Mods.OsuModBlinds import OsuModBlinds
 
 
 class OsuModFlashlight(ModFlashlight):
     """The playfield is hidden outside a circle around the cursor."""
 
-    Name = "Flashlight"
-    Acronym = "FL"
-    Description = "Restricted view area."
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Flashlight."""
+        return [*super().IncompatibleMods, type(OsuModBlinds)]

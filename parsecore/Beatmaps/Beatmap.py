@@ -28,23 +28,52 @@ from collections import defaultdict
 
 from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
 from parsecore.Beatmaps.BeatmapInfo import BeatmapInfo
+from parsecore.Beatmaps.BeatmapInfo import BeatmapInfo as BInfo
 from parsecore.Beatmaps.BeatmapMetadata import BeatmapMetadata
 from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
+from parsecore.Beatmaps.ControlPoints.TimingControlPoint import DEFAULT_BEAT_LENGTH
+from parsecore.Beatmaps.IBeatmap import IBeatmap
 from parsecore.Beatmaps.Timing.BreakPeriod import BreakPeriod
 from parsecore.Rulesets.Objects.HitObject import HitObject
 from parsecore.Rulesets.Scoring.HitResult import AffectsCombo
+from parsecore.Utils.Precision import Clamp
 
 
-class Beatmap:
-    """A beatmap with its settings, control points, breaks and hit objects."""
+class Beatmap(IBeatmap):
+    """A beatmap with its attributes, control points, breaks and hit objects."""
 
     def __init__(self) -> None:
-        """Create an empty beatmap with default settings."""
-        self.BeatmapInfo: BeatmapInfo = BeatmapInfo()
+        """Create an empty beatmap with default attributes."""
+        self._difficulty: BeatmapDifficulty = BeatmapDifficulty()
+        self._beatmap_info: BeatmapInfo = BeatmapInfo(
+            Metadata=BeatmapMetadata(
+                Artist="Unknown",
+                Title="Unknown",
+                Author="Unknown Creator"
+            ),
+            DifficultyName="Normal",
+            Difficulty=self.Difficulty
+        )
+
         self.ControlPointInfo: ControlPointInfo = ControlPointInfo()
         self.Breaks: list[BreakPeriod] = []
-        self.UnhandledEventLines: list[str] = []
         self.HitObjects: list[HitObject] = []
+        self.UnhandledEventLines: list[str] = []
+
+    @property
+    def BeatmapInfo(self) -> BInfo:
+        """Return basic information about the beatmap."""
+        return self._beatmap_info
+
+    @BeatmapInfo.setter
+    def BeatmapInfo(self, value: BInfo):
+        """Replace the beatmap info and sync its difficulty settings.
+
+        Args:
+            value: The new beatmap info.
+        """
+        self._beatmap_info = value
+        self.Difficulty = self._beatmap_info.Difficulty.Clone()
 
     @property
     def Metadata(self) -> BeatmapMetadata:
@@ -54,7 +83,7 @@ class Beatmap:
     @property
     def Difficulty(self) -> BeatmapDifficulty:
         """Return the beatmap's difficulty settings."""
-        return self.BeatmapInfo.Difficulty
+        return self._difficulty
 
     @Difficulty.setter
     def Difficulty(self, value: BeatmapDifficulty) -> None:
@@ -63,7 +92,8 @@ class Beatmap:
         Args:
             value: The new difficulty settings.
         """
-        self.BeatmapInfo.Difficulty = value
+        self._difficulty = value
+        self.BeatmapInfo.Difficulty = self._difficulty.Clone()
 
     @property
     def TotalBreakTime(self) -> float:
@@ -78,7 +108,7 @@ class Beatmap:
         """
         combo = 0
 
-        def add_combo(hit_object) -> None:
+        def add_combo(hit_object: HitObject) -> None:
             """Count an object and everything nested inside it."""
             nonlocal combo
             if AffectsCombo(hit_object.Judgement.MaxResult):
@@ -97,37 +127,39 @@ class Beatmap:
         Returns:
             The most common beat length, or ``0`` if the beatmap is empty.
         """
+        last_time: float
         timing_points = self.ControlPointInfo.TimingPoints
         if not timing_points:
             return 0.0
 
         if not self.HitObjects:
-            return timing_points[0].BeatLength
-
-        last_time = max(h.GetEndTime() for h in self.HitObjects)
+            last_time = timing_points[-1].Time
+        else:
+            last_time = max(h.GetEndTime() for h in self.HitObjects)
 
         # Sum how long each beat length is in effect for, then take the longest.
         durations: dict[float, float] = defaultdict(float)
         for i, point in enumerate(timing_points):
             if point.Time > last_time:
-                break
-            start = max(point.Time, self.HitObjects[0].StartTime)
-            end = (
-                timing_points[i + 1].Time
-                if i + 1 < len(timing_points)
-                else last_time
-            )
-            durations[point.BeatLength] += max(0.0, end - start)
+                duration = 0.0
+            else:
+                current_time = 0.0 if i == 0 else point.Time
+                next_time = last_time if i == len(timing_points) else timing_points[i + 1].Time
+                duration = next_time - current_time
+
+            beat_length = round(point.BeatLength, 3)
+            durations[beat_length] += duration
 
         if not durations:
-            return timing_points[0].BeatLength
+            return DEFAULT_BEAT_LENGTH
 
-        # Ties go to the earlier beat length, matching osu!.
-        best = max(durations.values())
-        for point in timing_points:
-            if durations.get(point.BeatLength, -1.0) == best:
-                return point.BeatLength
-        return timing_points[0].BeatLength
+        most_common_beat_length = max(durations, key=lambda k: durations[k])
+        if most_common_beat_length == 0.0:
+            return DEFAULT_BEAT_LENGTH
+
+        min_beat_length = min(point.BeatLength for point in timing_points)
+        max_beat_length = max(point.BeatLength for point in timing_points)
+        return Clamp(most_common_beat_length, min_beat_length, max_beat_length)
 
     def __repr__(self) -> str:
         """Return an unambiguous representation."""

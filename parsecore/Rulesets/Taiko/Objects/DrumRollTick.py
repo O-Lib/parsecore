@@ -24,26 +24,31 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from parsecore.Rulesets.Scoring.EmptyHitWindows import EmptyHitWindows
 from parsecore.Rulesets.Taiko.Objects.StrongNestedHitObject import (
     StrongNestedHitObject,
 )
+from parsecore.Rulesets.Taiko.Objects.TaikoHitObject import TaikoHitObject
 from parsecore.Rulesets.Taiko.Objects.TaikoStrongableHitObject import (
     TaikoStrongableHitObject,
 )
+
+if TYPE_CHECKING:
+    from parsecore.Rulesets.Taiko.Objects.DrumRoll import DrumRoll
 
 
 class DrumRollTick(TaikoStrongableHitObject):
     """One hit the player must land while rolling."""
 
-    def __init__(self, parent=None, start_time: float = 0.0) -> None:
+    def __init__(self, parent: DrumRoll) -> None:
         """Create a drum roll tick.
 
         Args:
             parent: The drum roll this tick belongs to.
-            start_time: The tick's time in milliseconds.
         """
-        super().__init__(start_time)
+        super().__init__()
         self.Parent = parent
         self.FirstTick: bool = False
         self.TickSpacing: float = 0.0
@@ -54,7 +59,11 @@ class DrumRollTick(TaikoStrongableHitObject):
         return self.TickSpacing / 2
 
     def CreateJudgement(self):
-        """Return the judgement this object is scored with."""
+        """Return the judgement this object is scored with.
+
+        Returns:
+            The taiko drum roll tick judgement instance.
+        """
         from parsecore.Rulesets.Taiko.Judgements.TaikoJudgement import (
             TaikoDrumRollTickJudgement,
         )
@@ -62,7 +71,11 @@ class DrumRollTick(TaikoStrongableHitObject):
         return TaikoDrumRollTickJudgement()
 
     def CreateHitWindows(self):
-        """Return no windows; a tick is judged on its own spacing."""
+        """Return no windows; a tick is judged on its own spacing.
+
+        Returns:
+            An empty hit windows instance.
+        """
         return EmptyHitWindows()
 
     def CreateStrongNestedHit(self, start_time: float) -> StrongNestedHitObject:
@@ -70,7 +83,23 @@ class DrumRollTick(TaikoStrongableHitObject):
 
         Args:
             start_time: When the second hand lands.
+
+        Returns:
+            The nested strong hit object for the tick.
         """
-        nested = StrongNestedHitObject(self, start_time)
-        nested.Samples = list(self.Samples)
+        nested = _DrumRollTickStrongNestedHit(self)
+        nested.StartTime = start_time
+        nested.Samples = self.Samples
         return nested
+
+
+class _DrumRollTickStrongNestedHit(StrongNestedHitObject):
+    """The second hand of a strong drum roll tick."""
+    
+    def __init__(self, parent: TaikoHitObject) -> None:
+        """Create a strong nested hit for a drum roll tick.
+
+        Args:
+            parent: The parent hit object.
+        """
+        super().__init__(parent)

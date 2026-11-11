@@ -25,8 +25,12 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
 from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Rulesets.Catch.Difficulty.CatchDifficultyAttributes import (
+    CatchDifficultyAttributes,
+)
 from parsecore.Rulesets.Catch.Difficulty.CatchPerformanceAttributes import (
     CatchPerformanceAttributes,
 )
@@ -35,9 +39,17 @@ from parsecore.Rulesets.Catch.Objects.CatchHitObject import (
     PREEMPT_MID,
     PREEMPT_MIN,
 )
+from parsecore.Rulesets.Difficulty.DifficultyAttributes import DifficultyAttributes
 from parsecore.Rulesets.Difficulty.PerformanceCalculator import PerformanceCalculator
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.IApplicableToDifficulty import IApplicableToDifficulty
+from parsecore.Rulesets.Mods.ModFlashlight import ModFlashlight
+from parsecore.Rulesets.Mods.ModHidden import ModHidden
+from parsecore.Rulesets.Mods.ModNoFail import ModNoFail
 from parsecore.Rulesets.Scoring.HitResult import HitResult
+from parsecore.Scoring.ScoreInfo import ScoreInfo
+from parsecore.Utils import ModUtils
+from parsecore.Utils.Precision import Clamp
 
 
 class CatchPerformanceCalculator(PerformanceCalculator):
@@ -51,7 +63,7 @@ class CatchPerformanceCalculator(PerformanceCalculator):
         self._num_katu = 0
         self._num_miss = 0
 
-    def CreatePerformanceAttributes(self, score, attributes):
+    def CreatePerformanceAttributes(self, score: ScoreInfo, attributes: DifficultyAttributes):
         """Return what a catch score is worth.
 
         Args:
@@ -61,7 +73,8 @@ class CatchPerformanceCalculator(PerformanceCalculator):
         Returns:
             The performance breakdown.
         """
-        mods = list(score.Mods)
+        mods = score.Mods
+        catch_attributes = cast(CatchDifficultyAttributes, attributes)
 
         # Catch scores its four kinds of object separately: fruit, droplets,
         # tiny droplets, and the tiny droplets that were dropped.
@@ -73,10 +86,10 @@ class CatchPerformanceCalculator(PerformanceCalculator):
             0, score.GetCount(HitResult.Miss) + score.GetCount(HitResult.LargeTickMiss)
         )
 
-        score_max_combo = min(max(score.MaxCombo, 0), attributes.MaxCombo)
+        score_max_combo = Clamp(score.MaxCombo, 0, catch_attributes.MaxCombo)
 
         value = (
-            DiffUtils.Pow(5.0 * max(1.0, attributes.StarRating / 0.0049) - 4.0, 2.0)
+            DiffUtils.Pow(5.0 * max(1.0, catch_attributes.StarRating / 0.0049) - 4.0, 2.0)
             / 100000.0
         )
 
@@ -97,13 +110,12 @@ class CatchPerformanceCalculator(PerformanceCalculator):
                 1.0,
             )
 
-        difficulty = score.BeatmapDifficulty.Clone()
+        difficulty = score.BeatmapInfo.Difficulty.Clone()
         for mod in mods:
-            apply = getattr(mod, "ApplyToDifficulty", None)
-            if callable(apply):
-                apply(difficulty)
+            if isinstance(mod, IApplicableToDifficulty):
+                mod.ApplyToDifficulty(difficulty)
 
-        clock_rate = _clock_rate_with_mods(mods)
+        clock_rate = ModUtils.CalculateRateWithMods(mods)
 
         preempt = (
             BeatmapDifficulty.DifficultyRange(
@@ -127,18 +139,18 @@ class CatchPerformanceCalculator(PerformanceCalculator):
 
         value *= approach_rate_factor
 
-        if _has_mod(mods, "HD"):
+        if any(m for m in mods if isinstance(m, ModHidden)):
             if approach_rate <= 10.0:
                 value *= 1.05 + 0.075 * (10.0 - approach_rate)
             else:
                 value *= 1.01 + 0.04 * (11.0 - min(11.0, approach_rate))
 
-        if _has_mod(mods, "FL"):
+        if any(m for m in mods if isinstance(m, ModFlashlight)):
             value *= 1.35 * length_bonus
 
         value *= DiffUtils.Pow(self._accuracy(), 5.5)
 
-        if _has_mod(mods, "NF"):
+        if any(m for m in mods if isinstance(m, ModNoFail)):
             value *= max(0.90, 1.0 - 0.02 * self._num_miss)
 
         return CatchPerformanceAttributes(Total=value)
@@ -148,7 +160,7 @@ class CatchPerformanceCalculator(PerformanceCalculator):
         total = self._total_hits()
         if total == 0:
             return 0.0
-        return min(max(self._total_successful_hits() / total, 0.0), 1.0)
+        return Clamp(self._total_successful_hits() / total, 0.0, 1.0)
 
     def _total_hits(self) -> int:
         """Return how many objects the player was judged on."""
@@ -167,24 +179,3 @@ class CatchPerformanceCalculator(PerformanceCalculator):
     def _total_combo_hits(self) -> int:
         """Return how many objects counted towards the combo."""
         return self._num_miss + self._num100 + self._num300
-
-
-def _has_mod(mods: list, acronym: str) -> bool:
-    """Return whether a mod is among those the score was set with.
-
-    Args:
-        mods: The mods the score was set with.
-        acronym: The mod to look for.
-    """
-    return any(getattr(mod, "Acronym", None) == acronym for mod in mods)
-
-
-def _clock_rate_with_mods(mods: list) -> float:
-    """Return the rate the beatmap is played at.
-
-    Args:
-        mods: The mods the score was set with.
-    """
-    from parsecore.Rulesets.Difficulty.DifficultyCalculator import DifficultyCalculator
-
-    return DifficultyCalculator.GetClockRate(mods)

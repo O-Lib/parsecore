@@ -25,18 +25,21 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Objects.HitObject import HitObject
 from parsecore.Rulesets.Objects.SliderEventGenerator import TAIL_LENIENCY
 from parsecore.Rulesets.Osu.Mods.OsuModHidden import FADE_OUT_DURATION_MULTIPLIER
-from parsecore.Rulesets.Osu.Objects.OsuHitObject import PREEMPT_MIN
+from parsecore.Rulesets.Osu.Objects.OsuHitObject import PREEMPT_MIN, OsuHitObject
 from parsecore.Rulesets.Osu.Objects.Slider import Slider
 from parsecore.Rulesets.Osu.Objects.SliderRepeat import SliderRepeat
 from parsecore.Rulesets.Osu.Objects.SliderTick import SliderTick
 from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
+from parsecore.Utils.Precision import Clamp
 from parsecore.Utils.Vector2 import Vector2, f32
 
 # Distances are scaled so every circle has this radius; 100 is then the
@@ -57,8 +60,8 @@ class OsuDifficultyHitObject(DifficultyHitObject):
 
     def __init__(
         self,
-        hit_object,
-        last_object,
+        hit_object: HitObject,
+        last_object: HitObject,
         clock_rate: float,
         objects: list[DifficultyHitObject],
         index: int,
@@ -83,6 +86,8 @@ class OsuDifficultyHitObject(DifficultyHitObject):
             else self.AdjustedDeltaTime
         )
 
+        self.BaseObject = cast(OsuHitObject, self.BaseObject)
+        self.LastObject = cast(OsuHitObject, self.LastObject)
         self.JumpDistance = 0.0
         self.LazyJumpDistance = 0.0
         self.MinimumJumpDistance = 0.0
@@ -142,16 +147,14 @@ class OsuDifficultyHitObject(DifficultyHitObject):
             fade_out_duration = base_object.TimePreempt * FADE_OUT_DURATION_MULTIPLIER
 
             return min(
-                min(max((time - fade_in_start_time) / fade_in_duration, 0.0), 1.0),
+                Clamp((time - fade_in_start_time) / fade_in_duration, 0.0, 1.0),
                 1.0
-                - min(
-                    max((time - fade_out_start_time) / fade_out_duration, 0.0), 1.0
-                ),
+                - Clamp((time - fade_out_start_time) / fade_out_duration, 0.0, 1.0)
             )
 
-        return min(max((time - fade_in_start_time) / fade_in_duration, 0.0), 1.0)
+        return Clamp((time - fade_in_start_time) / fade_in_duration, 0.0, 1.0)
 
-    def CalculateDoubleTapFeasibility(self, next_obj) -> float:
+    def CalculateDoubleTapFeasibility(self, next_obj: OsuDifficultyHitObject | None) -> float:
         """Return how easily this object can be double-tapped with the next.
 
         Two objects close in time and space can be hit with a single roll of
@@ -208,8 +211,13 @@ class OsuDifficultyHitObject(DifficultyHitObject):
         # osu! holds this in a ``float``, so the division rounds before use.
         scaling_factor = f32(NORMALISED_RADIUS / f32(base_object.Radius))
 
-        last_difficulty_object = self.Previous()
-        last_last_difficulty_object = self.Previous(1)
+        last_previous = self.Previous()
+        last_difficulty_object = last_previous if isinstance(last_previous, OsuDifficultyHitObject) else None
+
+        last_last_previous = self.Previous(1)
+        last_last_difficulty_object = (
+            last_last_previous if isinstance(last_last_previous, OsuDifficultyHitObject) else None
+        )
 
         last_cursor_position = (
             self._get_end_cursor_position(last_difficulty_object)
@@ -256,7 +264,8 @@ class OsuDifficultyHitObject(DifficultyHitObject):
             last_last_difficulty_object.BaseObject, Spinner
         ):
             if (
-                isinstance(last_difficulty_object.BaseObject, Slider)
+                last_difficulty_object is not None
+                and isinstance(last_difficulty_object.BaseObject, Slider)
                 and last_difficulty_object.TravelDistance > 0
             ):
                 last_cursor_position = (
@@ -273,7 +282,7 @@ class OsuDifficultyHitObject(DifficultyHitObject):
                 last_last_cursor_position,
             )
             slider_angle = self._calculate_slider_angle(
-                last_difficulty_object, last_last_cursor_position
+                cast(OsuDifficultyHitObject, last_difficulty_object), last_last_cursor_position
             )
 
             v = base_object.StackedPosition - last_cursor_position
@@ -281,7 +290,7 @@ class OsuDifficultyHitObject(DifficultyHitObject):
             self.Angle = min(angle, slider_angle)
 
     def _calculate_slider_angle(
-        self, last_difficulty_object, last_last_cursor_position: Vector2
+        self, last_difficulty_object: OsuDifficultyHitObject, last_last_cursor_position: Vector2
     ) -> float:
         """Return the angle measured from a slider's own exit direction.
 
@@ -293,7 +302,7 @@ class OsuDifficultyHitObject(DifficultyHitObject):
 
         previous_base = last_difficulty_object.BaseObject
         if isinstance(previous_base, Slider) and last_difficulty_object.TravelDistance > 0:
-            second_last_nested = previous_base.NestedHitObjects[-2]
+            second_last_nested = cast(OsuHitObject, previous_base.NestedHitObjects[-2])
             last_last_cursor_position = second_last_nested.StackedPosition
 
         return _calculate_angle(
@@ -303,7 +312,7 @@ class OsuDifficultyHitObject(DifficultyHitObject):
         )
 
     @staticmethod
-    def _get_end_cursor_position(difficulty_hit_object) -> Vector2:
+    def _get_end_cursor_position(difficulty_hit_object: OsuDifficultyHitObject) -> Vector2:
         """Return where the cursor is assumed to rest after an object.
 
         Args:
@@ -315,11 +324,12 @@ class OsuDifficultyHitObject(DifficultyHitObject):
 
     def _compute_slider_cursor_position(self) -> None:
         """Walk a slider's nested objects to find how far the cursor moves."""
-        slider = self.BaseObject
-        if not isinstance(slider, Slider):
+        if not isinstance(self.BaseObject, Slider):
             return
         if self.LazyEndPosition is not None:
             return
+
+        slider = self.BaseObject
 
         tracking_end_time = max(
             slider.StartTime + slider.Duration + TAIL_LENIENCY,
@@ -328,7 +338,7 @@ class OsuDifficultyHitObject(DifficultyHitObject):
 
         nested_objects = list(slider.NestedHitObjects)
 
-        last_real_tick = None
+        last_real_tick: SliderTick | None = None
         for hit_object in slider.NestedHitObjects:
             if isinstance(hit_object, SliderTick):
                 last_real_tick = hit_object
@@ -357,7 +367,7 @@ class OsuDifficultyHitObject(DifficultyHitObject):
         scaling_factor = NORMALISED_RADIUS / slider.Radius
 
         for i in range(1, len(nested_objects)):
-            curr_movement_obj = nested_objects[i]
+            curr_movement_obj = cast(OsuHitObject, nested_objects[i])
 
             curr_movement = (
                 curr_movement_obj.StackedPosition - curr_cursor_position
@@ -368,7 +378,7 @@ class OsuDifficultyHitObject(DifficultyHitObject):
             required_movement = ASSUMED_SLIDER_RADIUS
 
             if i == len(nested_objects) - 1:
-                lazy_movement = self.LazyEndPosition - curr_cursor_position
+                lazy_movement = cast(Vector2, self.LazyEndPosition) - curr_cursor_position
                 if lazy_movement.length() < curr_movement.length():
                     curr_movement = lazy_movement
                 curr_movement_length = scaling_factor * curr_movement.length()

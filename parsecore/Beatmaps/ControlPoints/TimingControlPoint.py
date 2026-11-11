@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from parsecore.Beatmaps.ControlPoints.ControlPoint import ControlPoint
 from parsecore.Beatmaps.Timing.TimeSignature import SIMPLE_QUADRUPLE
 from parsecore.Beatmaps.Timing.TimeSignature import TimeSignature as TimeSignatureType
+from parsecore.Utils.Precision import Clamp
 
 DEFAULT_BEAT_LENGTH = 1000.0
 
@@ -43,14 +44,14 @@ class TimingControlPoint(ControlPoint):
 
     def __post_init__(self) -> None:
         """Clamp the beat length to the range osu! accepts."""
-        self.BeatLength = min(max(self.BeatLength, 6.0), 60000.0)
+        self.BeatLength = Clamp(self.BeatLength, 6.0, 60000.0)
 
     @property
     def BPM(self) -> float:
         """Return the tempo in beats per minute."""
         return 60000.0 / self.BeatLength
 
-    def IsRedundant(self, existing: ControlPoint) -> bool:
+    def IsRedundant(self, existing: ControlPoint | None) -> bool:
         """Return ``False``; timing points are never redundant.
 
         Args:
@@ -58,5 +59,23 @@ class TimingControlPoint(ControlPoint):
         """
         return False
 
+    def __eq__(self, value: object) -> bool:
+        """Check equality with another timing control point.
 
-DEFAULT = TimingControlPoint()
+        Args:
+            value: The object to compare with.
+
+        Returns:
+            ``True`` if beat length, time signature, bar line settings, and time match.
+        """
+        if not isinstance(value, TimingControlPoint):
+            raise NotImplementedError
+        return (
+            super().__eq__(value)
+            and self.TimeSignature.__eq__(value)
+            and self.OmitFirstBarLine == value.OmitFirstBarLine
+            and self.BeatLength == value.BeatLength
+        )
+
+
+DEFAULT = TimingControlPoint(BeatLength=60000.0 / 60.0)

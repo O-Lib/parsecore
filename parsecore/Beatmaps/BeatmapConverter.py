@@ -33,7 +33,7 @@ from parsecore.Rulesets.Objects.HitObject import HitObject
 class BeatmapConverter:
     """Turns a decoded beatmap into the objects one ruleset plays."""
 
-    def __init__(self, beatmap) -> None:
+    def __init__(self, beatmap: Beatmap) -> None:
         """Create a converter for a beatmap.
 
         Args:
@@ -49,7 +49,7 @@ class BeatmapConverter:
         """Return an empty beatmap of the ruleset's own type."""
         return Beatmap()
 
-    def ConvertHitObject(self, original: HitObject, beatmap) -> list[HitObject]:
+    def ConvertHitObject(self, original: HitObject, beatmap: Beatmap) -> list[HitObject]:
         """Convert one object into the ruleset's own objects.
 
         Args:
@@ -70,10 +70,13 @@ class BeatmapConverter:
         Raises:
             ValueError: If the beatmap cannot be converted to this ruleset.
         """
-        if not self.CanConvert():
-            raise ValueError("this beatmap cannot be converted to that ruleset")
+        original = copy.copy(self.Beatmap)
 
-        return self.ConvertBeatmap(copy.deepcopy(self.Beatmap))
+        original.BeatmapInfo = copy.deepcopy(original.BeatmapInfo)
+        original.ControlPointInfo = original.ControlPointInfo.DeepClone()
+        original.Breaks = sorted(self.Beatmap.Breaks, key=lambda b: b.StartTime)
+
+        return self.ConvertBeatmap(original)
 
     def ConvertBeatmap(self, original: Beatmap) -> Beatmap:
         """Convert every object of a beatmap into this ruleset's own.

@@ -37,3 +37,8 @@ class TailNote(Note):
     def MaximumJudgementOffset(self) -> float:
         """Return how late this object can still be judged."""
         return super().MaximumJudgementOffset * RELEASE_WINDOW_LENIENCE
+
+    def CreateJudgement(self):
+        """Return the judgement this object is scored with."""
+        from parsecore.Rulesets.Mania.Judgements.ManiaJudgement import ManiaJudgement
+        return ManiaJudgement()

@@ -24,12 +24,57 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
+
+if TYPE_CHECKING:
+    from parsecore.Audio.HitSampleInfo import HitSampleInfo
 
 
 @runtime_checkable
-class IHasRepeats(Protocol):
+class IHasRepeats(IHasDuration, Protocol):
     """An object that repeats a number of times."""
 
-    repeat_count: int
-    node_samples: list
+    RepeatCount: int
+    NodeSamples: list[list[HitSampleInfo]]
+    # IHasRepeats.Samples will be used to recognize HitObject.Samples.
+    Samples: list[HitSampleInfo]
+
+
+def SpanCount(obj: IHasRepeats) -> int:
+    """Calculate the total number of spans (repeats + 1) for a repeating object.
+
+    Args:
+        obj: The repeating object.
+
+    Returns:
+        The total span count.
+    """
+    return obj.RepeatCount + 1
+
+
+def GetNodeSamples(obj: IHasRepeats, node_index: int) -> list[HitSampleInfo]:
+    """Get the list of sample infos for a specific node index.
+
+    Args:
+        obj: The repeating object.
+        node_index: The index of the node.
+
+    Returns:
+        The list of HitSampleInfo for the node, or the object's default samples if out of range.
+    """
+    return obj.NodeSamples[node_index] if node_index < len(obj.NodeSamples) else obj.Samples
+
+
+def PopulateNodeSamples(obj: IHasRepeats) -> None:
+    """Populate node samples for a repeating object if not already sufficiently populated.
+
+    Args:
+        obj: The repeating object to populate node samples for.
+    """
+    if len(obj.NodeSamples) >= obj.RepeatCount + 2:
+        return
+
+    while len(obj.NodeSamples) < obj.RepeatCount + 2:
+        obj.NodeSamples.append([o.With() for o in obj.Samples])

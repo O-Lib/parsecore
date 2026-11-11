@@ -24,6 +24,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
 from parsecore.Rulesets.Mods.ModEasy import DIFFICULTY_RATIO, ModEasy
 
 # How much slower the playfield scrolls.
@@ -35,7 +36,7 @@ class TaikoModEasy(ModEasy):
 
     Description = "Beats move slower, and less accuracy required!"
 
-    def ApplyToDifficulty(self, difficulty) -> None:
+    def ApplyToDifficulty(self, difficulty: BeatmapDifficulty) -> None:
         """Halve the accuracy window and slow the playfield down.
 
         Args:

@@ -25,7 +25,9 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Mods.ModAutoplay import ModAutoplay
 from parsecore.Rulesets.Mods.ModType import ModType
+from parsecore.Rulesets.Osu.Mods.OsuModAutopilot import OsuModAutopilot
 
 
 class OsuModSpunOut(Mod):
@@ -34,4 +36,7 @@ class OsuModSpunOut(Mod):
     Name = "Spun Out"
     Acronym = "SO"
     Description = "Spinners will be automatically completed."
-    Type = ModType.Fun
+    Type = ModType.Automation
+    ScoreMultiplier = 0.9
+    IncompatibleMods = [type(ModAutoplay), type(OsuModAutopilot)]
+    Ranked = True

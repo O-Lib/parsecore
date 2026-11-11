@@ -24,10 +24,16 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
+from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Mods.ModScoreV2 import ModScoreV2
+from parsecore.Rulesets.Objects.HitObject import HitObject
 from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
     CalculateDifficultyPeppyStars,
 )
 from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
+from parsecore.Rulesets.Objects.Types.IHasPath import IHasPath
 from parsecore.Rulesets.Scoring.HitResult import HitResult
 from parsecore.Rulesets.Scoring.Legacy.ILegacyScoreSimulator import (
     ILegacyScoreSimulator,
@@ -35,6 +41,16 @@ from parsecore.Rulesets.Scoring.Legacy.ILegacyScoreSimulator import (
 from parsecore.Rulesets.Scoring.Legacy.LegacyScoreAttributes import (
     LegacyScoreAttributes,
 )
+from parsecore.Rulesets.Taiko.Mods.TaikoModDaycore import TaikoModDaycore
+from parsecore.Rulesets.Taiko.Mods.TaikoModDoubleTime import TaikoModDoubleTime
+from parsecore.Rulesets.Taiko.Mods.TaikoModEasy import TaikoModEasy
+from parsecore.Rulesets.Taiko.Mods.TaikoModFlashlight import TaikoModFlashlight
+from parsecore.Rulesets.Taiko.Mods.TaikoModHalfTime import TaikoModHalfTime
+from parsecore.Rulesets.Taiko.Mods.TaikoModHardRock import TaikoModHardRock
+from parsecore.Rulesets.Taiko.Mods.TaikoModHidden import TaikoModHidden
+from parsecore.Rulesets.Taiko.Mods.TaikoModNightcore import TaikoModNightcore
+from parsecore.Rulesets.Taiko.Mods.TaikoModNoFail import TaikoModNoFail
+from parsecore.Rulesets.Taiko.Mods.TaikoModRelax import TaikoModRelax
 from parsecore.Rulesets.Taiko.Objects.DrumRoll import DrumRoll
 from parsecore.Rulesets.Taiko.Objects.DrumRollTick import DrumRollTick
 from parsecore.Rulesets.Taiko.Objects.Hit import Hit
@@ -63,23 +79,6 @@ MINIMUM_ROTATIONS_PER_SECOND = 7.5
 # What kiai multiplies a note by.
 KIAI_MULTIPLIER = 1.2
 
-# What the mods multiply an osu!stable score by, and what they multiply it by
-# once the second scoring version is in play.
-MOD_MULTIPLIERS = {
-    "NF": (0.5, 1.0),
-    "EZ": (0.5, 0.5),
-    "HT": (0.3, 0.3),
-    "DC": (0.3, 0.3),
-    "HD": (1.06, 1.06),
-    "HR": (1.06, 1.06),
-    "DT": (1.12, 1.12),
-    "NC": (1.12, 1.12),
-    "FL": (1.12, 1.12),
-}
-
-# Mods osu!stable refused to score at all.
-UNSCORED_MODS = ("RX",)
-
 
 class TaikoLegacyScoreSimulator(ILegacyScoreSimulator):
     """Simulates a perfect taiko play under osu!stable's first scoring system."""
@@ -92,21 +91,22 @@ class TaikoLegacyScoreSimulator(ILegacyScoreSimulator):
         self._difficulty_peppy_stars = 0
         self._playable_beatmap = None
 
-    def Simulate(self, beatmap, playable_beatmap) -> LegacyScoreAttributes:
+    def Simulate(self, workingBeatmap: WorkingBeatmap, playable_beatmap: Beatmap) -> LegacyScoreAttributes:
         """Return the highest osu!stable score a beatmap allows.
 
         Args:
-            beatmap: The beatmap as it was decoded.
+            workingBeatmap: The beatmap as it was decoded.
             playable_beatmap: The same beatmap as taiko plays it.
         """
         self._playable_beatmap = playable_beatmap
+        beatmap = workingBeatmap.Beatmap
 
         count_normal = 0
         count_slider = 0
         count_spinner = 0
 
         for hit_object in beatmap.HitObjects:
-            if hasattr(hit_object, "Path"):
+            if isinstance(hit_object, IHasPath):
                 count_slider += 1
             elif isinstance(hit_object, IHasDuration):
                 count_spinner += 1
@@ -161,7 +161,7 @@ class TaikoLegacyScoreSimulator(ILegacyScoreSimulator):
         return attributes
 
     def _simulate_hit(
-        self, hit_object, next_hit_object, attributes: LegacyScoreAttributes
+        self, hit_object: HitObject, next_hit_object: HitObject | None, attributes: LegacyScoreAttributes
     ) -> None:
         """Add what one object is worth to the running score.
 
@@ -210,8 +210,31 @@ class TaikoLegacyScoreSimulator(ILegacyScoreSimulator):
             is_bonus = True
             bonus_result = HitResult.LargeBonus
         elif isinstance(hit_object, DrumRoll):
-            self._simulate_drum_roll(hit_object, next_hit_object, attributes)
+            drum_roll = hit_object
+            min_hit_delay = self._slider_taiko_min_hit_delay(drum_roll)
+
+            if next_hit_object is not None:
+                next_hittable_start_time = (
+                        next_hit_object.StartTime - self._slider_taiko_min_hit_delay(next_hit_object)
+                        if isinstance(next_hit_object, DrumRoll)
+                        else next_hit_object.StartTime
+                )
+
+                endpoint_hittable = (
+                        next_hittable_start_time is None
+                        or next_hittable_start_time - (drum_roll.EndTime + int(min_hit_delay)) > int(min_hit_delay)
+                )
+
+                hittable_end_time = drum_roll.EndTime + int(min_hit_delay) if endpoint_hittable else drum_roll.EndTime
+
+                while drum_roll.StartTime < hittable_end_time:
+                    drum_roll_tick = DrumRollTick(drum_roll)
+                    drum_roll_tick.IsStrong = drum_roll.IsStrong
+                    self._simulate_hit(drum_roll_tick, None, attributes)
+
+                    drum_roll.StartTime += min_hit_delay
             return
+
         elif isinstance(hit_object, StrongNestedHitObject):
             # These never need handling on their own. All a strong hit does to
             # the score is double its parent, which the parent sees to itself;
@@ -278,46 +301,7 @@ class TaikoLegacyScoreSimulator(ILegacyScoreSimulator):
         if increase_combo:
             self._combo += 1
 
-    def _simulate_drum_roll(
-        self, drum_roll, next_hit_object, attributes: LegacyScoreAttributes
-    ) -> None:
-        """Add the ticks osu!stable would have placed along a drum roll.
-
-        Args:
-            drum_roll: The drum roll being hit.
-            next_hit_object: The object after it, if there is one.
-            attributes: The score being built up.
-        """
-        min_hit_delay = self._slider_taiko_min_hit_delay(drum_roll)
-
-        # osu!stable let a drum roll be hit slightly past its end, but only
-        # where the next object leaves room for it.
-        if isinstance(next_hit_object, DrumRoll):
-            next_start = next_hit_object.StartTime - self._slider_taiko_min_hit_delay(
-                next_hit_object
-            )
-        elif next_hit_object is not None:
-            next_start = next_hit_object.StartTime
-        else:
-            next_start = None
-
-        endpoint_hittable = next_start is None or (
-            next_start - (drum_roll.EndTime + int(min_hit_delay)) > int(min_hit_delay)
-        )
-        hittable_end_time = (
-            drum_roll.EndTime + int(min_hit_delay)
-            if endpoint_hittable
-            else drum_roll.EndTime
-        )
-
-        time = drum_roll.StartTime
-        while time < hittable_end_time:
-            tick = DrumRollTick(drum_roll)
-            tick.IsStrong = drum_roll.IsStrong
-            self._simulate_hit(tick, None, attributes)
-            time += min_hit_delay
-
-    def _slider_taiko_min_hit_delay(self, drum_roll) -> float:
+    def _slider_taiko_min_hit_delay(self, drum_roll: DrumRoll) -> float:
         """Return how far apart osu!stable placed a drum roll's ticks.
 
         Args:
@@ -343,24 +327,34 @@ class TaikoLegacyScoreSimulator(ILegacyScoreSimulator):
 
         return max_rate
 
-    def GetLegacyScoreMultiplier(self, mods: list, difficulty=None) -> float:
+    @staticmethod
+    def GetLegacyScoreMultiplier(mods: list[Mod]) -> float:
         """Return what the mods multiply an osu!stable score by.
 
         Args:
             mods: The mods the score was set with.
-            difficulty: Unused by taiko; mania reads it.
         """
-        acronyms = [getattr(mod, "Acronym", None) for mod in mods]
-        score_v2 = "SV2" in acronyms
+        score_v2 = any(m for m in mods if isinstance(m, ModScoreV2))
 
         multiplier = 1.0
 
-        for acronym in acronyms:
-            if acronym in UNSCORED_MODS:
-                return 0.0
+        for mod in mods:
+            if isinstance(mod, (TaikoModDoubleTime, TaikoModNightcore, TaikoModFlashlight)):
+                multiplier *= 1.12
 
-            pair = MOD_MULTIPLIERS.get(acronym)
-            if pair is not None:
-                multiplier *= pair[1] if score_v2 else pair[0]
+            elif isinstance(mod, (TaikoModHidden, TaikoModHardRock)):
+                multiplier *= 1.06
+
+            elif isinstance(mod, (TaikoModHalfTime, TaikoModDaycore)):
+                multiplier *= 0.3
+
+            elif isinstance(mod, TaikoModEasy):
+                multiplier *= 0.5
+
+            elif isinstance(mod, TaikoModNoFail):
+                multiplier *= 1.0 if score_v2 else 0.5
+
+            elif isinstance(mod, TaikoModRelax):
+                return 0.0
 
         return multiplier

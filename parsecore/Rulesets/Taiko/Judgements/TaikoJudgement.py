@@ -62,12 +62,3 @@ class TaikoDrumRollTickJudgement(TaikoJudgement):
     def MaxResult(self) -> HitResult:
         """Return the best judgement this object can receive."""
         return HitResult.SmallBonus
-
-
-class TaikoIgnoreJudgement(TaikoJudgement):
-    """An object that is never judged itself, only through its children."""
-
-    @property
-    def MaxResult(self) -> HitResult:
-        """Return the best judgement this object can receive."""
-        return HitResult.IgnoreHit

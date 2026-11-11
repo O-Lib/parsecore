@@ -27,18 +27,19 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from parsecore.Audio.HitSampleInfo import (
-    BANK_NORMAL,
     HIT_CLAP,
     HIT_FINISH,
     HIT_NORMAL,
     HIT_WHISTLE,
     FileHitSampleInfo,
     HitSampleInfo,
+    LegacyHitSampleInfo,
 )
 from parsecore.Beatmaps.Formats import Parsing
 from parsecore.Beatmaps.Legacy.LegacyHitObjectType import LegacyHitObjectType
 from parsecore.Beatmaps.Legacy.LegacyHitSoundType import LegacyHitSoundType
 from parsecore.Beatmaps.Legacy.LegacySampleBank import LegacySampleBank
+from parsecore.Rulesets.Objects.HitObject import HitObject
 from parsecore.Rulesets.Objects.Legacy.ConvertHitCircle import ConvertHitCircle
 from parsecore.Rulesets.Objects.Legacy.ConvertHitObject import ConvertHitObject
 from parsecore.Rulesets.Objects.Legacy.ConvertHold import ConvertHold
@@ -52,7 +53,7 @@ from parsecore.Rulesets.Objects.Types.PathType import (
     PathType,
     SplineType,
 )
-from parsecore.Utils.Precision import AlmostEquals
+from parsecore.Utils import Precision
 from parsecore.Utils.Vector2 import Vector2
 
 # From this beatmap format on, path coordinates keep their fractional part.
@@ -73,19 +74,6 @@ class SampleBankInfo:
     def Clone(self) -> SampleBankInfo:
         """Return an independent copy."""
         return replace(self)
-
-
-@dataclass(frozen=True, slots=True)
-class LegacyHitSampleInfo(HitSampleInfo):
-    """A sample that remembers what the beatmap said about it.
-
-    Which of its fields the beatmap set and which it left open decides what a
-    sample control point is allowed to fill in later.
-    """
-
-    CustomSampleBank: int = 0
-    IsLayered: bool = False
-    BankSpecified: bool = False
 
 
 def _is_linear(p0: Vector2, p1: Vector2, p2: Vector2) -> bool:
@@ -114,7 +102,7 @@ class ConvertHitObjectParser:
         self.first_object = True
         self.last_object: ConvertHitObject | None = None
 
-    def Parse(self, text: str) -> ConvertHitObject | None:
+    def Parse(self, text: str) -> HitObject | None:
         """Parse one hit-object line.
 
         Args:
@@ -127,10 +115,14 @@ class ConvertHitObjectParser:
         if len(split) < 5:
             return None
 
+        x = Precision.Clamp(Parsing.ParseFloat(split[0], Parsing.MAX_COORDINATE_VALUE), 0, 512)
+        y = Precision.Clamp(Parsing.ParseFloat(split[1], Parsing.MAX_COORDINATE_VALUE), 0, 512)
+
         # osu! truncates coordinates to integers before using them.
-        pos = Vector2(
-            int(Parsing.ParseFloat(split[0], Parsing.MAX_COORDINATE_VALUE)),
-            int(Parsing.ParseFloat(split[1], Parsing.MAX_COORDINATE_VALUE)),
+        pos = (
+            Vector2(x, y)
+            if self.FormatVersion >= FIRST_LAZER_VERSION
+            else Vector2(int(x), int(y))
         )
 
         start_time = Parsing.ParseDouble(split[2]) + self.Offset
@@ -149,127 +141,94 @@ class ConvertHitObjectParser:
         result: ConvertHitObject | None = None
 
         if type_ & LegacyHitObjectType.Circle:
-            result = ConvertHitCircle(start_time, pos)
+            result = self._create_hit_circle(pos, combo, combo_offset)
             if len(split) > 5:
                 self._read_custom_sample_banks(split[5], bank_info)
 
         elif type_ & LegacyHitObjectType.Slider:
-            result = self._parse_slider(split, pos, start_time, sound_type, bank_info)
+            length: float | None = None
+            repeat_count = Parsing.ParseInt(split[6])
+
+            if repeat_count > 9000:
+                raise ValueError("Repeat count is way too high")
+
+            repeat_count = max(0, repeat_count - 1)
+
+            if len(split) > 7:
+                length = max(0.0, Parsing.ParseDouble(split[7], Parsing.MAX_COORDINATE_VALUE))
+                if length == 0.0:
+                    length = None
+
+            if len(split) > 10:
+                self._read_custom_sample_banks(split[10], bank_info, True)
+
+            nodes = repeat_count + 2
+            node_bank_infos = [bank_info.Clone() for _ in range(nodes)]
+
+            if len(split) > 9 and len(split[9]) > 0:
+                sets = split[9].split("|")
+                for i in range(nodes):
+                    if i >= len(sets):
+                        break
+                    info = node_bank_infos[i]
+                    self._read_custom_sample_banks(sets[i], info)
+
+            node_sound_types = [sound_type for _ in range(nodes)]
+
+            if len(split) > 8 and len(split[8]) > 0:
+                adds = split[8].split("|")
+                for i in range(nodes):
+                    if i >= len(adds):
+                        break
+                    sound = Parsing.TryParseInt(adds[i])
+                    node_sound_types[i] = LegacyHitSoundType(sound)
+
+            node_samples = [
+                self._convert_sound_type(node_sound_types[i], node_bank_infos[i])
+                for i in range(nodes)
+            ]
+
+            result = self._create_slider(
+                pos,
+                combo,
+                combo_offset,
+                self._convert_path_string(split[5], pos),
+                length,
+                repeat_count,
+                node_samples
+            )
 
         elif type_ & LegacyHitObjectType.Spinner:
             duration = max(
                 0.0, Parsing.ParseDouble(split[5]) + self.Offset - start_time
             )
-            result = ConvertSpinner(start_time, start_time + duration)
+
+            result = self._create_spinner(Vector2(512, 384) / 2.0, combo, duration)
+
             if len(split) > 6:
                 self._read_custom_sample_banks(split[6], bank_info)
 
         elif type_ & LegacyHitObjectType.Hold:
             end_time = max(start_time, Parsing.ParseDouble(split[2]))
+
             if len(split) > 5 and split[5]:
                 ss = split[5].split(":")
                 end_time = max(start_time, Parsing.ParseDouble(ss[0]))
                 self._read_custom_sample_banks(":".join(ss[1:]), bank_info)
-            result = ConvertHold(start_time, end_time + self.Offset, pos)
+
+            result = self._create_hold(pos, end_time + self.Offset - start_time)
 
         if result is None:
             return None
 
         result.StartTime = start_time
+        result.LegacyType = type_
 
-        if isinstance(result, (ConvertHitCircle, ConvertSlider)):
-            # The first object of a beatmap always opens a combo, and so does
-            # the first one after a spinner.
-            result.NewCombo = (
-                self.first_object
-                or isinstance(self.last_object, ConvertSpinner)
-                or combo
-            )
-            result.ComboOffset = combo_offset if combo else 0
-        elif isinstance(result, ConvertSpinner):
-            result.NewCombo = combo
-        else:
-            result.NewCombo = False
-
-        result.LegacyType = int(type_)
-        result.Samples = self._convert_sound_type(sound_type, bank_info)
+        if len(result.Samples) == 0:
+            result.Samples = self._convert_sound_type(sound_type, bank_info)
 
         self.first_object = False
-        self.last_object = result
         return result
-
-    def _parse_slider(
-        self,
-        split: list[str],
-        pos: Vector2,
-        start_time: float,
-        sound_type: LegacyHitSoundType,
-        bank_info: SampleBankInfo,
-    ) -> ConvertSlider | None:
-        """Parse the slider-specific columns of a hit-object line.
-
-        Args:
-            split: The comma-separated columns.
-            pos: The slider head's position.
-            start_time: The slider's start time.
-            sound_type: The object's default hit sound.
-            bank_info: The object's default sample banks.
-
-        Returns:
-            The parsed slider.
-        """
-        if len(split) < 7:
-            return None
-
-        repeat_count = Parsing.ParseInt(split[6])
-        if repeat_count > 9000:
-            raise Parsing.ParsingError("repeat count is way too high")
-        repeat_count = max(0, repeat_count - 1)
-
-        length: float | None = None
-        if len(split) > 7:
-            length = max(
-                0.0, Parsing.ParseDouble(split[7], Parsing.MAX_COORDINATE_VALUE)
-            )
-            if length == 0:
-                length = None
-
-        if len(split) > 10:
-            self._read_custom_sample_banks(split[10], bank_info)
-
-        # One node per repeat, plus the head and tail.
-        nodes = repeat_count + 2
-
-        node_bank_infos = [bank_info.Clone() for _ in range(nodes)]
-        if len(split) > 9 and split[9]:
-            sets = split[9].split("|")
-            for i in range(min(nodes, len(sets))):
-                self._read_custom_sample_banks(sets[i], node_bank_infos[i], True)
-
-        node_sound_types = [sound_type] * nodes
-        if len(split) > 8 and split[8]:
-            adds = split[8].split("|")
-            for i in range(min(nodes, len(adds))):
-                try:
-                    node_sound_types[i] = LegacyHitSoundType(int(adds[i]))
-                except (ValueError, TypeError):
-                    pass
-
-        node_samples = [
-            self._convert_sound_type(node_sound_types[i], node_bank_infos[i])
-            for i in range(nodes)
-        ]
-
-        slider = ConvertSlider(start_time, pos)
-        slider.Path = SliderPath(self._convert_path_string(split[5], pos), length)
-
-        if AlmostEquals(slider.Path.Distance, 0):
-            repeat_count = 0
-            node_samples = [node_samples[0], node_samples[-1]]
-
-        slider.RepeatCount = repeat_count
-        slider.NodeSamples = node_samples
-        return slider
 
     def _convert_path_string(
         self, point_string: str, offset: Vector2
@@ -430,8 +389,9 @@ class ConvertHitObjectParser:
 
         return result
 
+    @staticmethod
     def _read_custom_sample_banks(
-        self, string: str, bank_info: SampleBankInfo, banks_only: bool = False
+        string: str, bank_info: SampleBankInfo, banks_only: bool = False
     ) -> None:
         """Read the trailing ``bank:addBank:custom:volume:file`` column.
 
@@ -468,11 +428,12 @@ class ConvertHitObjectParser:
             bank_info.CustomSampleBank = Parsing.ParseInt(split[2])
         if len(split) > 3:
             bank_info.Volume = max(0, Parsing.ParseInt(split[3]))
-        if len(split) > 4:
-            bank_info.Filename = split[4]
 
+        bank_info.Filename = split[4] if len(split) > 4 else None
+
+    @staticmethod
     def _convert_sound_type(
-        self, type_: LegacyHitSoundType, bank_info: SampleBankInfo
+        type_: LegacyHitSoundType, bank_info: SampleBankInfo
     ) -> list[HitSampleInfo]:
         """Turn hit-sound flags plus banks into the samples that play.
 
@@ -483,76 +444,147 @@ class ConvertHitObjectParser:
         Returns:
             The samples for this object or node.
         """
-        if bank_info.Filename:
-            sound_types: list[HitSampleInfo] = [
-                FileHitSampleInfo(
-                    Bank=BANK_NORMAL,
-                    Volume=bank_info.Volume,
-                    Filename=bank_info.Filename,
-                )
-            ]
-        else:
-            sound_types = [
-                self._legacy_sample(
+        sound_types: list[HitSampleInfo] = []
+
+        if not bank_info.Filename:
+            sound_types.append(
+                LegacyHitSampleInfo(
                     HIT_NORMAL,
                     bank_info.BankForNormal,
-                    bank_info,
-                    editor_auto_bank=True,
-                    # A sound that does not name the normal flag still plays a
-                    # normal sample underneath it, as a layered one. No flags
-                    # at all counts as a plain normal sample.
-                    is_layered=(
-                        type_ != LegacyHitSoundType.None_
-                        and not (type_ & LegacyHitSoundType.Normal)
-                    ),
+                    bank_info.Volume,
+                    True,
+                    bank_info.CustomSampleBank,
+                    type_ is not LegacyHitSoundType.None_ and LegacyHitSoundType.Normal not in type_
                 )
-            ]
+            )
+        else:
+            sound_types.append(
+                FileHitSampleInfo(bank_info.Filename, bank_info.Volume)
+            )
 
-        for flag, name in (
-            (LegacyHitSoundType.Finish, HIT_FINISH),
-            (LegacyHitSoundType.Whistle, HIT_WHISTLE),
-            (LegacyHitSoundType.Clap, HIT_CLAP),
-        ):
-            if type_ & flag:
-                sound_types.append(
-                    self._legacy_sample(
-                        name,
-                        bank_info.BankForAdditions,
-                        bank_info,
-                        editor_auto_bank=bank_info.EditorAutoBank,
-                    )
+        if LegacyHitSoundType.Finish in type_:
+            sound_types.append(
+                LegacyHitSampleInfo(
+                    HIT_FINISH,
+                    bank_info.BankForAdditions,
+                    bank_info.Volume,
+                    bank_info.EditorAutoBank,
+                    bank_info.CustomSampleBank
                 )
+            )
+
+        if LegacyHitSoundType.Whistle in type_:
+            sound_types.append(
+                LegacyHitSampleInfo(
+                    HIT_WHISTLE,
+                    bank_info.BankForAdditions,
+                    bank_info.Volume,
+                    bank_info.EditorAutoBank,
+                    bank_info.CustomSampleBank
+                )
+            )
+
+        if LegacyHitSoundType.Clap in type_:
+            sound_types.append(
+                LegacyHitSampleInfo(
+                    HIT_CLAP,
+                    bank_info.BankForAdditions,
+                    bank_info.Volume,
+                    bank_info.EditorAutoBank,
+                    bank_info.CustomSampleBank
+                )
+            )
 
         return sound_types
 
-    @staticmethod
-    def _legacy_sample(
-        name: str,
-        bank: str,
-        bank_info: SampleBankInfo,
-        editor_auto_bank: bool,
-        is_layered: bool = False,
-    ) -> LegacyHitSampleInfo:
-        """Return one sample as the beatmap described it.
+    def _create_hit_circle(self, position: Vector2, new_combo: bool, combo_offset: int) -> ConvertHitObject:
+        """Create and configure a convert hit circle.
 
         Args:
-            name: Which sound this is.
-            bank: The bank the beatmap named, if it named one.
-            bank_info: The banks and volume in effect.
-            editor_auto_bank: Whether the bank was left to the control points.
-            is_layered: Whether this sample plays underneath another.
-        """
-        custom = bank_info.CustomSampleBank
+            position: The position on the playfield.
+            new_combo: Whether this object starts a new combo.
+            combo_offset: The combo offset value.
 
-        return LegacyHitSampleInfo(
-            Name=name,
-            Bank=bank or BANK_NORMAL,
-            # A custom bank is only looked up from two upwards, for reasons
-            # lost to osu!stable.
-            Suffix=str(custom) if custom >= 2 else None,
-            Volume=bank_info.Volume,
-            EditorAutoBank=editor_auto_bank,
-            CustomSampleBank=custom,
-            IsLayered=is_layered,
-            BankSpecified=bool(bank),
-        )
+        Returns:
+            The created ConvertHitCircle instance.
+        """
+        last_object = ConvertHitCircle()
+        last_object.Position = position
+        last_object.NewCombo = self.first_object or isinstance(last_object, ConvertSpinner) or new_combo
+        last_object.ComboOffset = combo_offset if new_combo else 0
+        self.last_object = last_object
+        return last_object
+
+    def _create_slider(
+            self,
+            position: Vector2,
+            new_combo: bool,
+            combo_offset: int,
+            control_points: list[PathControlPoint],
+            length: float | None,
+            repeat_count: int,
+            node_samples: list[list[HitSampleInfo]]
+    ) -> ConvertHitObject:
+        """Create and configure a convert slider.
+
+        Args:
+            position: The position on the playfield.
+            new_combo: Whether this object starts a new combo.
+            combo_offset: The combo offset value.
+            control_points: The slider path control points.
+            length: The explicit slider length, or None.
+            repeat_count: The number of repeats.
+            node_samples: The samples for each node.
+
+        Returns:
+            The created ConvertSlider instance.
+        """
+        path = SliderPath(control_points, length)
+
+        if Precision.AlmostEquals(path.Distance, 0.0):
+            repeat_count = 0
+            node_samples = [node_samples[0], node_samples[-1]]
+
+        last_object = ConvertSlider()
+        last_object.Position = position
+        last_object.NewCombo = self.first_object or isinstance(last_object, ConvertSpinner) or new_combo
+        last_object.ComboOffset = combo_offset if new_combo else 0
+        last_object.Path = path
+        last_object.NodeSamples = node_samples
+        last_object.RepeatCount = repeat_count
+        self.last_object = last_object
+        return last_object
+
+    def _create_spinner(self, position: Vector2, new_combo: bool, duration: float) -> ConvertHitObject:
+        """Create and configure a convert spinner.
+
+        Args:
+            position: The position on the playfield.
+            new_combo: Whether this object starts a new combo.
+            duration: The duration of the spinner in milliseconds.
+
+        Returns:
+            The created ConvertSpinner instance.
+        """
+        last_object = ConvertSpinner()
+        last_object.Position = position
+        last_object.Duration = duration
+        last_object.NewCombo = new_combo
+        self.last_object = last_object
+        return last_object
+
+    def _create_hold(self, position: Vector2, duration: float) -> ConvertHitObject:
+        """Create and configure a convert hold object.
+
+        Args:
+            position: The position on the playfield.
+            duration: The duration of the hold note in milliseconds.
+
+        Returns:
+            The created ConvertHold instance.
+        """
+        last_object = ConvertHold()
+        last_object.Position = position
+        last_object.Duration = duration
+        self.last_object = last_object
+        return last_object

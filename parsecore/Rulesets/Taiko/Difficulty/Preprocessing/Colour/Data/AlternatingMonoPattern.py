@@ -24,18 +24,33 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.MonoStreak import (
+    MonoStreak,
+)
+
+if TYPE_CHECKING:
+    from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+        TaikoDifficultyHitObject,
+    )
+
 
 class AlternatingMonoPattern:
     """Colour streaks of one length, alternating sides."""
 
     def __init__(self) -> None:
         """Create an empty pattern."""
-        self.MonoStreaks: list = []
-        self.Parent = None
+        from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.RepeatingHitPatterns import (
+            RepeatingHitPatterns,
+        )
+
+        self.MonoStreaks: list[MonoStreak] = []
+        self.Parent: RepeatingHitPatterns = RepeatingHitPatterns()
         self.Index: int = 0
 
     @property
-    def FirstHitObject(self):
+    def FirstHitObject(self) -> TaikoDifficultyHitObject:
         """Return the note the pattern opens on."""
         return self.MonoStreaks[0].FirstHitObject
 

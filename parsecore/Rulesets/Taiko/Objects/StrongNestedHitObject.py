@@ -31,18 +31,21 @@ from parsecore.Rulesets.Taiko.Objects.TaikoHitObject import TaikoHitObject
 class StrongNestedHitObject(TaikoHitObject):
     """The second hand of a strong note."""
 
-    def __init__(self, parent=None, start_time: float = 0.0) -> None:
+    def __init__(self, parent: TaikoHitObject) -> None:
         """Create the nested hit of a strong note.
 
         Args:
             parent: The note this belongs to.
-            start_time: The hit's time in milliseconds.
         """
-        super().__init__(start_time)
+        super().__init__()
         self.Parent = parent
 
     def CreateJudgement(self):
-        """Return the judgement this object is scored with."""
+        """Return the judgement this object is scored with.
+
+        Returns:
+            The taiko strong judgement instance.
+        """
         from parsecore.Rulesets.Taiko.Judgements.TaikoJudgement import (
             TaikoStrongJudgement,
         )
@@ -50,5 +53,9 @@ class StrongNestedHitObject(TaikoHitObject):
         return TaikoStrongJudgement()
 
     def CreateHitWindows(self):
-        """Return no windows; the parent's hit decides this one."""
+        """Return no windows; the parent's hit decides this one.
+
+        Returns:
+            An empty hit windows instance.
+        """
         return EmptyHitWindows()

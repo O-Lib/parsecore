@@ -26,6 +26,9 @@ from __future__ import annotations
 
 import math
 
+from parsecore.Audio.HitSampleInfo import HIT_NORMAL, HitSampleInfo
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
 from parsecore.Rulesets.Objects import SliderEventGenerator
 from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
     GetPrecisionAdjustedBeatLength,
@@ -33,6 +36,14 @@ from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
 from parsecore.Rulesets.Objects.PathControlPoint import PathControlPoint
 from parsecore.Rulesets.Objects.SliderEventGenerator import SliderEventType
 from parsecore.Rulesets.Objects.SliderPath import SliderPath
+from parsecore.Rulesets.Objects.Types.IHasGenerateTicks import IHasGenerateTicks
+from parsecore.Rulesets.Objects.Types.IHasPathWithRepeats import IHasPathWithRepeats
+from parsecore.Rulesets.Objects.Types.IHasRepeats import (
+    GetNodeSamples,
+    PopulateNodeSamples,
+    SpanCount,
+)
+from parsecore.Rulesets.Objects.Types.IHasSliderVelocity import IHasSliderVelocity
 from parsecore.Rulesets.Osu.Objects.OsuHitObject import (
     BASE_SCORING_DISTANCE,
     OsuHitObject,
@@ -44,24 +55,22 @@ from parsecore.Rulesets.Osu.Objects.SliderTick import SliderTick
 from parsecore.Utils.Vector2 import Vector2
 
 
-class Slider(OsuHitObject):
+class Slider(OsuHitObject, IHasPathWithRepeats, IHasSliderVelocity, IHasGenerateTicks):
     """A curve the player traces, optionally repeating."""
 
-    def __init__(self, start_time: float = 0.0, position: Vector2 | None = None) -> None:
-        """Create a slider.
+    NodeSamples = []
 
-        Args:
-            start_time: The slider's time in milliseconds.
-            position: The slider head's position.
-        """
-        super().__init__(start_time, position)
+    def __init__(self) -> None:
+        """Create a slider."""
+        super().__init__()
 
         # osu! keeps one path instance with catmull optimisation enabled and
         # copies incoming control points into it.
         self._path = SliderPath()
         self._path.OptimiseCatmull = True
-        self.RepeatCount: int = 0
-        self.NodeSamples: list[list] = []
+        self._path.invalidated = self._update_nested_positions
+        self._repeat_count: int = 0
+        self.NodeSamples: list[list[HitSampleInfo]] = []
 
         self.Velocity: float = 1.0
         self.TickDistance: float = 0.0
@@ -69,8 +78,13 @@ class Slider(OsuHitObject):
         self.GenerateTicks: bool = True
         self.SliderVelocityMultiplier: float = 1.0
 
+        self._classic_slider_behaviour: bool = False
         self.HeadCircle: SliderHeadCircle | None = None
         self.TailCircle: SliderTailCircle | None = None
+        self.TailSamples: list[HitSampleInfo] = []
+        self.LastRepeat: SliderRepeat | None = None
+
+        self.Samples = self._update_nested_samples()
 
     @property
     def Path(self) -> SliderPath:
@@ -84,19 +98,28 @@ class Slider(OsuHitObject):
         Args:
             value: The path to copy from.
         """
+        self._path.ControlPoints.clear()
         self._path.ControlPoints = [
             PathControlPoint(cp.Position, cp.Type) for cp in value.ControlPoints
         ]
         self._path.ExpectedDistance = value.ExpectedDistance
         self._path.invalidate()
 
-        # osu! watches the path's version and moves the nested objects with it.
+    @property
+    def RepeatCount(self) -> int:
+        """Return how many times the slider repeats."""
+        return self._repeat_count
+
+    @RepeatCount.setter
+    def RepeatCount(self, value: int) -> None:
+        """Set how many times the slider repeats."""
+        self._repeat_count = value
         self._update_nested_positions()
 
     @property
     def Position(self) -> Vector2:
         """Return the slider head's position."""
-        return self._position
+        return self.position
 
     @Position.setter
     def Position(self, value: Vector2) -> None:
@@ -105,25 +128,8 @@ class Slider(OsuHitObject):
         Args:
             value: The new head position.
         """
-        self._position = value
+        self.position = value
         self._update_nested_positions()
-
-    def _update_nested_positions(self) -> None:
-        """Place every nested object again from the current path."""
-        for nested in self.NestedHitObjects:
-            if isinstance(nested, SliderHeadCircle):
-                nested.Position = self.Position
-            elif isinstance(nested, SliderTailCircle):
-                nested.Position = self.EndPosition
-            elif isinstance(nested, (SliderRepeat, SliderTick)):
-                nested.Position = self.Position + self.Path.PositionAt(
-                    nested.PathProgress
-                )
-
-    @property
-    def SpanCount(self) -> int:
-        """Return how many times the path is traversed."""
-        return self.RepeatCount + 1
 
     @property
     def Distance(self) -> float:
@@ -133,9 +139,7 @@ class Slider(OsuHitObject):
     @property
     def EndTime(self) -> float:
         """Return when the slider ends."""
-        if self.Velocity == 0:
-            return self.StartTime
-        return self.StartTime + self.SpanCount * self.Path.Distance / self.Velocity
+        return self.StartTime + SpanCount(self) * self.Path.Distance / self.Velocity
 
     @property
     def Duration(self) -> float:
@@ -150,47 +154,24 @@ class Slider(OsuHitObject):
     @property
     def SpanDuration(self) -> float:
         """Return how long one traversal of the path takes."""
-        return self.Duration / self.SpanCount
-
-    def ProgressAt(self, progress: float) -> float:
-        """Return the path progress at a fraction of the slider's duration.
-
-        Args:
-            progress: The fraction of the slider elapsed, ``0`` to ``1``.
-        """
-        p = (progress * self.SpanCount) % 1
-        if self.SpanAt(progress) % 2 == 1:
-            p = 1 - p
-        return p
-
-    def SpanAt(self, progress: float) -> int:
-        """Return which span is being traversed at a fraction of the duration.
-
-        Args:
-            progress: The fraction of the slider elapsed, ``0`` to ``1``.
-        """
-        return int(progress * self.SpanCount)
-
-    def CurvePositionAt(self, progress: float) -> Vector2:
-        """Return the offset from the slider head at a fraction of the duration.
-
-        Args:
-            progress: The fraction of the slider elapsed, ``0`` to ``1``.
-        """
-        return self.Path.PositionAt(self.ProgressAt(progress))
+        return self.Duration / SpanCount(self)
 
     @property
     def EndPosition(self) -> Vector2:
         """Return where the slider's path finishes."""
         return self.Position + self.CurvePositionAt(1.0)
 
-    def PositionAt(self, progress: float) -> Vector2:
-        """Return the absolute position at a fraction of the duration.
+    @property
+    def ClassicSliderBehaviour(self) -> bool:
+        """Return whether classic slider scoring rules apply."""
+        return self._classic_slider_behaviour
 
-        Args:
-            progress: The fraction of the slider elapsed, ``0`` to ``1``.
-        """
-        return self.Position + self.CurvePositionAt(progress)
+    @ClassicSliderBehaviour.setter
+    def ClassicSliderBehaviour(self, value: bool):
+        """Set whether classic slider scoring rules apply."""
+        self._classic_slider_behaviour = value
+        self.HeadCircle.ClassicSliderBehaviour = value
+        self.TailCircle.ClassicSliderBehaviour = value
 
     def StackedPositionAt(self, progress: float) -> Vector2:
         """Return the stacked position at a fraction of the duration.
@@ -200,7 +181,7 @@ class Slider(OsuHitObject):
         """
         return self.StackedPosition + self.CurvePositionAt(progress)
 
-    def ApplyDefaultsToSelf(self, control_point_info, difficulty) -> None:
+    def ApplyDefaultsToSelf(self, control_point_info: ControlPointInfo, difficulty: BeatmapDifficulty) -> None:
         """Derive velocity and tick spacing from the beatmap.
 
         Args:
@@ -249,46 +230,85 @@ class Slider(OsuHitObject):
             self.Velocity,
             self.TickDistance,
             self.Path.Distance,
-            self.SpanCount,
+            SpanCount(self),
         )
 
         for event in events:
             match event.Type:
                 case SliderEventType.Tick:
-                    tick = SliderTick(
-                        event.Time,
-                        self.Position + self.Path.PositionAt(event.PathProgress),
-                    )
+                    tick = SliderTick()
                     tick.SpanIndex = event.SpanIndex
                     tick.SpanStartTime = event.SpanStartTime
+                    tick.StartTime = event.Time
+                    tick.Position = self.Position + self.Path.PositionAt(event.PathProgress)
                     tick.PathProgress = event.PathProgress
                     tick.StackHeight = self.StackHeight
-                    tick.Scale = self.Scale
                     self.AddNested(tick)
 
                 case SliderEventType.Head:
-                    self.HeadCircle = SliderHeadCircle(event.Time, self.Position)
-                    self.HeadCircle.StackHeight = self.StackHeight
-                    self.AddNested(self.HeadCircle)
+                    HeadCircle = SliderHeadCircle()
+                    HeadCircle.StartTime = event.Time
+                    HeadCircle.Position = self.Position
+                    HeadCircle.StackHeight = self.StackHeight
+                    HeadCircle.ClassicSliderBehaviour = self.ClassicSliderBehaviour
+                    self.HeadCircle = HeadCircle
+                    self.AddNested(HeadCircle)
 
                 case SliderEventType.Repeat:
-                    repeat = SliderRepeat(
-                        self,
-                        self.StartTime + (event.SpanIndex + 1) * self.SpanDuration,
-                        self.Position + self.Path.PositionAt(event.PathProgress),
-                    )
-                    repeat.SpanIndex = event.SpanIndex
-                    repeat.SpanStartTime = event.SpanStartTime
+                    repeat = SliderRepeat(self)
+                    repeat.RepeatIndex = event.SpanIndex
+                    repeat.StartTime = self.StartTime + (event.SpanIndex + 1) * self.SpanDuration
+                    repeat.Position = self.Position + self.Path.PositionAt(event.PathProgress)
                     repeat.PathProgress = event.PathProgress
                     repeat.StackHeight = self.StackHeight
-                    repeat.Scale = self.Scale
+                    self.LastRepeat = repeat
                     self.AddNested(repeat)
 
                 case SliderEventType.Tail:
-                    self.TailCircle = SliderTailCircle(
-                        self, event.Time, self.EndPosition
-                    )
-                    self.TailCircle.SpanIndex = event.SpanIndex
-                    self.TailCircle.SpanStartTime = event.SpanStartTime
-                    self.TailCircle.StackHeight = self.StackHeight
-                    self.AddNested(self.TailCircle)
+                    TailCircle = SliderTailCircle(self)
+                    TailCircle.RepeatIndex = event.SpanIndex
+                    TailCircle.StartTime = event.Time
+                    TailCircle.Position = self.EndPosition
+                    TailCircle.StackHeight = self.StackHeight
+                    TailCircle.ClassicSliderBehaviour = self.ClassicSliderBehaviour
+                    self.TailCircle = TailCircle
+                    self.AddNested(TailCircle)
+
+        self._update_nested_samples()
+
+    def _update_nested_positions(self) -> None:
+        """Place every nested object again from the current path."""
+        for nested in self.NestedHitObjects:
+            if isinstance(nested, SliderHeadCircle):
+                nested.Position = self.Position
+            elif isinstance(nested, SliderTailCircle):
+                nested.Position = self.EndPosition
+            elif isinstance(nested, (SliderRepeat, SliderTick)):
+                nested.Position = self.Position + self.Path.PositionAt(
+                    nested.PathProgress
+                )
+
+    def _update_nested_samples(self) -> list[HitSampleInfo]:
+        """Update hit samples for nested objects like ticks and repeats."""
+        PopulateNodeSamples(self)
+
+        sample = next(
+            (s for s in self.Samples if s.Name == HIT_NORMAL),
+            self.Samples[0] if self.Samples else None
+        )
+        tick_sample = sample.With("slidertick") if sample is not None else None
+
+        for nested in self.NestedHitObjects:
+            if isinstance(nested, SliderTick):
+                nested.Samples.clear()
+                if tick_sample is not None:
+                    nested.Samples.append(tick_sample)
+
+            elif isinstance(nested, SliderRepeat):
+                nested.Samples = GetNodeSamples(self, nested.RepeatIndex + 1)
+
+        if self.HeadCircle is not None:
+            self.HeadCircle.Samples = GetNodeSamples(self, 0)
+
+        self.TailSamples = GetNodeSamples(self, self._repeat_count + 1)
+        return self.TailSamples

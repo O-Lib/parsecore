@@ -24,6 +24,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
 from parsecore.Beatmaps.BeatmapProcessor import BeatmapProcessor
 from parsecore.Rulesets.Catch.Beatmaps.CatchBeatmap import GetPalpableObjects
 from parsecore.Rulesets.Catch.Objects.Banana import Banana, BananaShower
@@ -37,7 +38,9 @@ from parsecore.Rulesets.Catch.UI.Catcher import (
     CalculateCatchWidth,
 )
 from parsecore.Rulesets.Catch.UI.CatchPlayfield import WIDTH as PLAYFIELD_WIDTH
+from parsecore.Rulesets.Objects.Types.IHasComboInformation import IHasComboInformation
 from parsecore.Utils.LegacyRandom import LegacyRandom
+from parsecore.Utils.Precision import Clamp
 from parsecore.Utils.Vector2 import f32
 
 # The seed osu!stable scattered every beatmap's bananas from.
@@ -49,7 +52,7 @@ HYPER_DASH_GRACE = f32(f32(1000.0 / 60.0) / 4)
 class CatchBeatmapProcessor(BeatmapProcessor):
     """Scatters catch objects and marks the dashes that cannot be walked."""
 
-    def __init__(self, beatmap) -> None:
+    def __init__(self, beatmap: Beatmap) -> None:
         """Create a processor for a beatmap.
 
         Args:
@@ -61,18 +64,16 @@ class CatchBeatmapProcessor(BeatmapProcessor):
 
     def PreProcess(self) -> None:
         """Force a new combo wherever a banana shower breaks the run."""
-        last_object = None
+        last_object: IHasComboInformation | None = None
 
         for hit_object in self.Beatmap.HitObjects:
-            if not isinstance(hit_object, CatchHitObject):
-                continue
-
-            if not isinstance(hit_object, BananaShower) and (
-                last_object is None or isinstance(last_object, BananaShower)
-            ):
-                hit_object.NewCombo = True
-
-            last_object = hit_object
+            if isinstance(hit_object, IHasComboInformation):
+                if not (
+                    isinstance(hit_object, BananaShower)
+                    and (last_object is None or isinstance(last_object, BananaShower))
+                ):
+                    hit_object.NewCombo = True
+                last_object = hit_object
 
         super().PreProcess()
 
@@ -82,20 +83,22 @@ class CatchBeatmapProcessor(BeatmapProcessor):
 
         self.ApplyPositionOffsets(self.Beatmap)
 
-        for index, hit_object in enumerate(
-            h for h in self.Beatmap.HitObjects if isinstance(h, CatchHitObject)
-        ):
-            hit_object.IndexInBeatmap = index
-            for nested in hit_object.NestedHitObjects:
-                if isinstance(nested, CatchHitObject):
-                    nested.IndexInBeatmap = index
+        index = 0
+        for hit_object in self.Beatmap.HitObjects:
+            if isinstance(hit_object, CatchHitObject):
+                hit_object.IndexInBeatmap = index
+                for nested in hit_object.NestedHitObjects:
+                    if isinstance(nested, CatchHitObject):
+                        nested.IndexInBeatmap = index
 
-            if hit_object.LastInCombo and hit_object.NestedHitObjects:
-                last_nested = hit_object.NestedHitObjects[-1]
-                if isinstance(last_nested, CatchHitObject):
-                    last_nested.LastInCombo = True
+                if hit_object.LastInCombo and hit_object.NestedHitObjects:
+                    last_nested = hit_object.NestedHitObjects[-1]
+                    if isinstance(last_nested, IHasComboInformation):
+                        last_nested.LastInCombo = True
 
-    def ApplyPositionOffsets(self, beatmap) -> None:
+            index += 1
+
+    def ApplyPositionOffsets(self, beatmap: Beatmap) -> None:
         """Scatter bananas and droplets from a fixed-seed generator.
 
         The generator is drawn from in beatmap order, including for values
@@ -111,53 +114,52 @@ class CatchBeatmapProcessor(BeatmapProcessor):
         last_start_time = 0.0
 
         for hit_object in beatmap.HitObjects:
-            if not isinstance(hit_object, CatchHitObject):
-                continue
+            if isinstance(hit_object, CatchHitObject):
+                hit_object.XOffset = 0.0
 
-            hit_object.XOffset = 0.0
-
-            if isinstance(hit_object, Fruit):
-                if self.HardRockOffsets:
-                    last_position, last_start_time = _apply_hard_rock_offset(
-                        hit_object, last_position, last_start_time, rng
-                    )
-
-            elif isinstance(hit_object, BananaShower):
-                for banana in hit_object.NestedHitObjects:
-                    if not isinstance(banana, Banana):
-                        continue
-                    banana.XOffset = f32(rng.NextDouble() * PLAYFIELD_WIDTH)
-                    # osu!stable drew a type, a rotation and a colour here.
-                    rng.Next()
-                    rng.Next()
-                    rng.Next()
-
-            elif isinstance(hit_object, JuiceStream):
-                last_position = (
-                    hit_object.OriginalX
-                    + hit_object.Path.ControlPoints[-1].Position.X
-                )
-                last_start_time = hit_object.StartTime
-
-                for nested in hit_object.NestedHitObjects:
-                    if not isinstance(nested, CatchHitObject):
-                        continue
-                    nested.XOffset = 0.0
-
-                    if isinstance(nested, TinyDroplet):
-                        nested.XOffset = min(
-                            max(rng.Next(-20, 20), -nested.OriginalX),
-                            PLAYFIELD_WIDTH - nested.OriginalX,
+                if isinstance(hit_object, Fruit):
+                    if self.HardRockOffsets:
+                        last_position, last_start_time = _apply_hard_rock_offset(
+                            hit_object, last_position, last_start_time, rng
                         )
-                    elif isinstance(nested, Droplet):
-                        # osu!stable drew a rotation here.
-                        rng.Next()
+
+                elif isinstance(hit_object, BananaShower):
+                    banana_shower = hit_object
+                    for banana in banana_shower.NestedHitObjects:
+                        if isinstance(banana, Banana):
+                            banana.XOffset = f32(rng.NextDouble() * PLAYFIELD_WIDTH)
+                            # osu!stable drew a type, a rotation and a colour here.
+                            rng.Next()
+                            rng.Next()
+                            rng.Next()
+
+                elif isinstance(hit_object, JuiceStream):
+                    juice_stream = hit_object
+                    last_position = (
+                        juice_stream.OriginalX
+                        + juice_stream.Path.ControlPoints[-1].Position.X
+                    )
+                    last_start_time = juice_stream.StartTime
+
+                    for nested in juice_stream.NestedHitObjects:
+                        if isinstance(nested, CatchHitObject):
+                            catch_object = nested
+                            catch_object.XOffset = 0.0
+
+                            if isinstance(catch_object, TinyDroplet):
+                                catch_object.XOffset = Clamp(
+                                    rng.Next(-20, 20),
+                                    -catch_object.OriginalX,
+                                    PLAYFIELD_WIDTH - catch_object.OriginalX)
+                            elif isinstance(catch_object, Droplet):
+                                # osu!stable drew a rotation here.
+                                rng.Next()
 
         _initialise_hyper_dash(beatmap)
 
 
 def _apply_hard_rock_offset(
-    hit_object, last_position: float | None, last_start_time: float, rng: LegacyRandom
+    hit_object: CatchHitObject, last_position: float | None, last_start_time: float, rng: LegacyRandom
 ) -> tuple[float | None, float]:
     """Nudge a fruit sideways the way hard rock does.
 
@@ -244,7 +246,7 @@ def _apply_offset(position: float, amount: float) -> float:
     return position
 
 
-def _initialise_hyper_dash(beatmap) -> None:
+def _initialise_hyper_dash(beatmap: Beatmap) -> None:
     """Mark every fruit the plate cannot reach the next one from.
 
     A dash covers one osu! pixel per millisecond. Where even that is not
@@ -268,30 +270,30 @@ def _initialise_hyper_dash(beatmap) -> None:
     last_excess = half_catcher_width
 
     for i in range(len(palpable) - 1):
-        current = palpable[i]
-        following = palpable[i + 1]
+        current_object = palpable[i]
+        next_object = palpable[i + 1]
 
-        current.HyperDashTarget = None
-        current.DistanceToHyperDash = 0.0
+        current_object.HyperDashTarget = None
+        current_object.DistanceToHyperDash = 0.0
 
-        this_direction = 1 if following.EffectiveX > current.EffectiveX else -1
+        this_direction = 1 if next_object.EffectiveX > current_object.EffectiveX else -1
 
         # Two whole millisecond counts less a single-precision grace period,
         # which osu! works out at single precision before widening it.
         time_to_next = f32(
-            int(following.StartTime) - int(current.StartTime) - HYPER_DASH_GRACE
+            int(next_object.StartTime) - int(current_object.StartTime) - HYPER_DASH_GRACE
         )
         # Both positions are single precision, so their difference is too.
-        distance_to_next = abs(f32(following.EffectiveX - current.EffectiveX)) - (
+        distance_to_next = abs(f32(next_object.EffectiveX - current_object.EffectiveX)) - (
             last_excess if last_direction == this_direction else half_catcher_width
         )
         distance_to_hyper = f32(time_to_next * BASE_DASH_SPEED - distance_to_next)
 
         if distance_to_hyper < 0:
-            current.HyperDashTarget = following
+            current_object.HyperDashTarget = next_object
             last_excess = half_catcher_width
         else:
-            current.DistanceToHyperDash = distance_to_hyper
-            last_excess = min(max(distance_to_hyper, 0.0), half_catcher_width)
+            current_object.DistanceToHyperDash = distance_to_hyper
+            last_excess = Clamp(distance_to_hyper, 0.0, half_catcher_width)
 
         last_direction = this_direction

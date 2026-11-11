@@ -35,4 +35,6 @@ class ModClassic(Mod):
     Acronym = "CL"
     Description = "Feeling nostalgic?"
     Type = ModType.Conversion
-    ScoreMultiplier = 1.0
+    ScoreMultiplier = 0.96
+    Ranked = False
+

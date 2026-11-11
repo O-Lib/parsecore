@@ -24,12 +24,22 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Rulesets.Difficulty.DifficultyAttributes import DifficultyAttributes
+from parsecore.Rulesets.Difficulty.PerformanceAttributes import PerformanceAttributes
 from parsecore.Rulesets.Difficulty.PerformanceCalculator import PerformanceCalculator
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mania.Difficulty.ManiaDifficultyAttributes import (
+    ManiaDifficultyAttributes,
+)
 from parsecore.Rulesets.Mania.Difficulty.ManiaPerformanceAttributes import (
     ManiaPerformanceAttributes,
 )
+from parsecore.Rulesets.Mods.ModEasy import ModEasy
+from parsecore.Rulesets.Mods.ModNoFail import ModNoFail
 from parsecore.Rulesets.Scoring.HitResult import HitResult
+from parsecore.Scoring.ScoreInfo import ScoreInfo
 
 # What each judgement is worth when weighing a score's accuracy.
 JUDGEMENT_VALUES = {
@@ -46,6 +56,7 @@ class ManiaPerformanceCalculator(PerformanceCalculator):
 
     def __init__(self) -> None:
         """Create the calculator."""
+        super().__init__()
         self._count_perfect = 0
         self._count_great = 0
         self._count_good = 0
@@ -54,7 +65,9 @@ class ManiaPerformanceCalculator(PerformanceCalculator):
         self._count_miss = 0
         self._score_accuracy = 0.0
 
-    def CreatePerformanceAttributes(self, score, attributes):
+    def CreatePerformanceAttributes(
+        self, score: ScoreInfo, attributes: DifficultyAttributes
+    ) -> PerformanceAttributes:
         """Return what a mania score is worth.
 
         Args:
@@ -64,7 +77,8 @@ class ManiaPerformanceCalculator(PerformanceCalculator):
         Returns:
             The performance breakdown.
         """
-        mods = list(score.Mods)
+        mods = score.Mods
+        attributes = cast(ManiaDifficultyAttributes, attributes)
 
         self._count_perfect = score.GetCount(HitResult.Perfect)
         self._count_great = score.GetCount(HitResult.Great)
@@ -76,9 +90,9 @@ class ManiaPerformanceCalculator(PerformanceCalculator):
 
         multiplier = 1.0
 
-        if _has_mod(mods, "NF"):
+        if any(m for m in mods if isinstance(m, ModNoFail)):
             multiplier *= 0.75
-        if _has_mod(mods, "EZ"):
+        if any(m for m in mods if isinstance(m, ModEasy)):
             multiplier *= 0.5
 
         difficulty_value = self._compute_difficulty_value(attributes)
@@ -88,11 +102,11 @@ class ManiaPerformanceCalculator(PerformanceCalculator):
             Difficulty=difficulty_value,
         )
 
-    def _compute_difficulty_value(self, attributes) -> float:
+    def _compute_difficulty_value(self, attributes: ManiaDifficultyAttributes) -> float:
         """Return what the beatmap's difficulty is worth to this score.
 
-        Nothing is awarded below eighty per cent; above it a twentieth of the
-        total is added for each further per cent.
+        Nothing is awarded below eighty percent; above it a twentieth of the
+        total is added for each further percent.
 
         Args:
             attributes: The beatmap's difficulty.
@@ -130,13 +144,3 @@ class ManiaPerformanceCalculator(PerformanceCalculator):
             + self._count_ok * JUDGEMENT_VALUES[HitResult.Ok]
             + self._count_meh * JUDGEMENT_VALUES[HitResult.Meh]
         ) / (total * JUDGEMENT_VALUES[HitResult.Perfect])
-
-
-def _has_mod(mods: list, acronym: str) -> bool:
-    """Return whether a mod is among those the score was set with.
-
-    Args:
-        mods: The mods the score was set with.
-        acronym: The mod to look for.
-    """
-    return any(getattr(mod, "Acronym", None) == acronym for mod in mods)

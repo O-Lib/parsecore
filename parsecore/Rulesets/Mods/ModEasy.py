@@ -24,13 +24,15 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Rulesets.Mods.IApplicableToDifficulty import IApplicableToDifficulty
 from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Mods.ModType import ModType
 
 DIFFICULTY_RATIO = 0.5
 
 
-class ModEasy(Mod):
+class ModEasy(Mod, IApplicableToDifficulty):
     """Larger circles, more forgiving HP drain, less accuracy required."""
 
     Name = "Easy"
@@ -39,9 +41,18 @@ class ModEasy(Mod):
     Type = ModType.DifficultyReduction
     ScoreMultiplier = 0.5
     Ranked = True
-    IncompatibleMods = ("HR", "DA")
 
-    def ApplyToDifficulty(self, difficulty) -> None:
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Easy.
+
+        Returns:
+            A list containing the HardRock mod class.
+        """
+        from parsecore.Rulesets.Mods.ModHardRock import ModHardRock
+        return [type(ModHardRock)]
+
+    def ApplyToDifficulty(self, difficulty: BeatmapDifficulty) -> None:
         """Halve the settings every ruleset shares.
 
         The overall difficulty is left alone here; each ruleset halves it

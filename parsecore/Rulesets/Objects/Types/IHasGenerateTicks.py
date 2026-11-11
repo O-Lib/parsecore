@@ -31,4 +31,4 @@ from typing import Protocol, runtime_checkable
 class IHasGenerateTicks(Protocol):
     """An object that may or may not generate slider ticks."""
 
-    generate_ticks: bool
+    GenerateTicks: bool

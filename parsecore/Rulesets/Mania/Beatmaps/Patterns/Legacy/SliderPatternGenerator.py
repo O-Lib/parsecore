@@ -26,7 +26,13 @@ from __future__ import annotations
 
 import math
 
-from parsecore.Audio.HitSampleInfo import HIT_CLAP, HIT_FINISH, HIT_WHISTLE
+from parsecore.Audio.HitSampleInfo import (
+    HIT_CLAP,
+    HIT_FINISH,
+    HIT_WHISTLE,
+    HitSampleInfo,
+)
+from parsecore.Beatmaps.Beatmap import Beatmap
 from parsecore.Rulesets.Mania.Beatmaps.Patterns.Legacy.LegacyPatternGenerator import (
     LegacyPatternGenerator,
 )
@@ -34,16 +40,27 @@ from parsecore.Rulesets.Mania.Beatmaps.Patterns.Legacy.PatternType import Patter
 from parsecore.Rulesets.Mania.Beatmaps.Patterns.Pattern import Pattern
 from parsecore.Rulesets.Mania.Objects.HoldNote import HoldNote
 from parsecore.Rulesets.Mania.Objects.Note import Note
+from parsecore.Rulesets.Objects.HitObject import HitObject
 from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
     GetPrecisionAdjustedBeatLength,
 )
+from parsecore.Rulesets.Objects.Types.IHasPath import IHasPath
+from parsecore.Rulesets.Objects.Types.IHasRepeats import IHasRepeats, SpanCount
+from parsecore.Rulesets.Objects.Types.IHasSliderVelocity import IHasSliderVelocity
+from parsecore.Rulesets.Objects.Types.IHasXPosition import IHasXPosition
+from parsecore.Utils.LegacyRandom import LegacyRandom
 
 
 class SliderPatternGenerator(LegacyPatternGenerator):
     """Turns one slider into the notes and holds it becomes."""
 
     def __init__(
-        self, random, hit_object, beatmap, total_columns: int, previous_pattern
+            self,
+            random: LegacyRandom,
+            hit_object: HitObject,
+            beatmap: Beatmap,
+            total_columns: int,
+            previous_pattern: Pattern
     ) -> None:
         """Create a generator for one slider.
 
@@ -62,19 +79,17 @@ class SliderPatternGenerator(LegacyPatternGenerator):
 
         timing_point = beatmap.ControlPointInfo.TimingPointAt(hit_object.StartTime)
 
-        if hasattr(hit_object, "SliderVelocityMultiplier"):
+        if isinstance(hit_object, IHasSliderVelocity):
             beat_length = GetPrecisionAdjustedBeatLength(
                 hit_object, timing_point, "mania"
             )
         else:
             beat_length = timing_point.BeatLength
 
-        self.SpanCount = getattr(hit_object, "SpanCount", 1)
+        self.SpanCount = SpanCount(hit_object) if isinstance(hit_object, IHasRepeats) else 1
         self.StartTime = int(round(hit_object.StartTime))
 
-        distance = hit_object.Path.ExpectedDistance
-        if distance is None:
-            distance = 0.0
+        distance = hit_object.Path.ExpectedDistance if isinstance(hit_object, IHasPath) else 0.0
 
         # This matches what osu!stable worked out.
         self.EndTime = int(
@@ -96,7 +111,7 @@ class SliderPatternGenerator(LegacyPatternGenerator):
         """
         return bool(self._convert_type & flag)
 
-    def Generate(self) -> list:
+    def Generate(self) -> list[Pattern]:
         """Return the patterns of notes and holds for this slider.
 
         A slider that became more than one object is split in two: everything
@@ -222,7 +237,8 @@ class SliderPatternGenerator(LegacyPatternGenerator):
         """
         pattern = Pattern()
 
-        next_column = self.GetColumn(getattr(self.HitObject, "X", 0.0), True)
+        position = self.HitObject.X if isinstance(self.HitObject, IHasXPosition) else 0.0
+        next_column = self.GetColumn(position, True)
         if (
             self._has_flag(PatternType.ForceNotStack)
             and self.PreviousPattern.ColumnWithObjects < self.TotalColumns
@@ -251,7 +267,8 @@ class SliderPatternGenerator(LegacyPatternGenerator):
         """
         pattern = Pattern()
 
-        column = self.GetColumn(getattr(self.HitObject, "X", 0.0), True)
+        position = self.HitObject.X if isinstance(self.HitObject, IHasXPosition) else 0.0
+        column = self.GetColumn(position, True)
         increasing = self.Random.NextDouble() > 0.5
 
         for _ in range(self.SpanCount + 1):
@@ -284,7 +301,8 @@ class SliderPatternGenerator(LegacyPatternGenerator):
         legacy = 4 <= self.TotalColumns <= 8
         interval = self.Random.Next(1, self.TotalColumns - (1 if legacy else 0))
 
-        next_column = self.GetColumn(getattr(self.HitObject, "X", 0.0), True)
+        position = self.HitObject.X if isinstance(self.HitObject, IHasXPosition) else 0.0
+        next_column = self.GetColumn(position, True)
 
         for _ in range(self.SpanCount + 1):
             self._add_to_pattern(pattern, next_column, start_time, start_time)
@@ -334,7 +352,7 @@ class SliderPatternGenerator(LegacyPatternGenerator):
                 p3 = min(p3, 0.1)
                 p4 = min(p4, 0.03)
 
-        def is_double_sample(sample) -> bool:
+        def is_double_sample(sample: HitSampleInfo) -> bool:
             return sample.Name in (HIT_CLAP, HIT_FINISH)
 
         can_generate_two_notes = not self._has_flag(PatternType.LowProbability)
@@ -362,7 +380,8 @@ class SliderPatternGenerator(LegacyPatternGenerator):
         # Integer division means this need not land on the slider's own end.
         end_time = start_time + self.SegmentDuration * self.SpanCount
 
-        next_column = self.GetColumn(getattr(self.HitObject, "X", 0.0), True)
+        position = self.HitObject.X if isinstance(self.HitObject, IHasXPosition) else 0.0
+        next_column = self.GetColumn(position, True)
         if (
             self._has_flag(PatternType.ForceNotStack)
             and self.PreviousPattern.ColumnWithObjects < self.TotalColumns
@@ -384,7 +403,8 @@ class SliderPatternGenerator(LegacyPatternGenerator):
         """
         pattern = Pattern()
 
-        hold_column = self.GetColumn(getattr(self.HitObject, "X", 0.0), True)
+        position = self.HitObject.X if isinstance(self.HitObject, IHasXPosition) else 0.0
+        hold_column = self.GetColumn(position, True)
         if (
             self._has_flag(PatternType.ForceNotStack)
             and self.PreviousPattern.ColumnWithObjects < self.TotalColumns
@@ -436,7 +456,7 @@ class SliderPatternGenerator(LegacyPatternGenerator):
 
         return pattern
 
-    def _sample_info_list_at(self, time: int) -> list:
+    def _sample_info_list_at(self, time: int) -> list[HitSampleInfo]:
         """Return the samples sounding at a point along the slider.
 
         Args:
@@ -447,14 +467,14 @@ class SliderPatternGenerator(LegacyPatternGenerator):
             return node_samples[0]
         return self.HitObject.Samples
 
-    def _node_samples_at(self, time: int) -> list | None:
+    def _node_samples_at(self, time: int) -> list[list[HitSampleInfo]] | None:
         """Return the node samples from a point along the slider onwards.
 
         Args:
             time: The time to read from.
         """
-        node_samples = getattr(self.HitObject, "NodeSamples", None)
-        if node_samples is None or not hasattr(self.HitObject, "Path"):
+        node_samples = self.HitObject.NodeSamples if isinstance(self.HitObject, IHasRepeats) else None
+        if node_samples is None or not isinstance(self.HitObject, IHasPath):
             return None
 
         index = (
@@ -477,16 +497,17 @@ class SliderPatternGenerator(LegacyPatternGenerator):
             end_time: When it ends, equal to the start for a plain note.
         """
         if start_time == end_time:
-            new_object = Note(start_time, column)
+            new_object = Note()
+            new_object.StartTime = start_time
+            new_object.Column = column
             new_object.Samples = self._sample_info_list_at(start_time)
         else:
-            new_object = HoldNote(
-                start_time,
-                column,
-                end_time - start_time,
-                play_sliding_samples=True,
-                node_samples=self._node_samples_at(start_time),
-            )
+            new_object = HoldNote()
+            new_object.StartTime = start_time
+            new_object.Column = column
+            new_object.Duration = end_time - start_time
+            new_object.PlaySlidingSamples = True
+            new_object.NodeSamples = self._node_samples_at(start_time)
             new_object.Samples = self.HitObject.Samples
 
         pattern.Add(new_object)

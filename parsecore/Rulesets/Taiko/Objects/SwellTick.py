@@ -32,13 +32,19 @@ class SwellTick(TaikoHitObject):
     """One hit towards completing a swell."""
 
     def CreateJudgement(self):
-        """Return the judgement this object is scored with."""
-        from parsecore.Rulesets.Taiko.Judgements.TaikoJudgement import (
-            TaikoIgnoreJudgement,
-        )
+        """Return the judgement this object is scored with.
 
-        return TaikoIgnoreJudgement()
+        Returns:
+            An ignore judgement instance.
+        """
+        from parsecore.Rulesets.Judgements.IgnoreJudgement import IgnoreJudgement
+
+        return IgnoreJudgement()
 
     def CreateHitWindows(self):
-        """Return no windows; a swell is not judged on timing."""
+        """Return no windows; a swell is not judged on timing.
+
+        Returns:
+            An empty hit windows instance.
+        """
         return EmptyHitWindows()

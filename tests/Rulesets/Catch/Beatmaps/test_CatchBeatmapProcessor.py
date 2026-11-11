@@ -23,6 +23,12 @@ SOFTWARE.
 """
 
 from parsecore.Rulesets.Catch.Beatmaps.CatchBeatmap import GetPalpableObjects
+from parsecore.Rulesets.Catch.Beatmaps.CatchBeatmapConverter import (
+    CatchBeatmapConverter,
+)
+from parsecore.Rulesets.Catch.Beatmaps.CatchBeatmapProcessor import (
+    CatchBeatmapProcessor,
+)
 from parsecore.Rulesets.Catch.Mods.CatchModHardRock import CatchModHardRock
 from parsecore.Rulesets.Catch.Objects.Banana import Banana
 from parsecore.Rulesets.Catch.Objects.Fruit import Fruit
@@ -38,21 +44,32 @@ def _fruit(beatmap):
 def test_a_reachable_fruit_is_not_a_hyper_dash():
     """Two fruit half a second and a few pixels apart need no hyper-dash."""
     beatmap = convert(fruits_at(200.0, 240.0), cs=4.0)
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor,
+    )
 
-    assert [f.HyperDash for f in _fruit(beatmap)] == [False, False]
+    assert [f.HyperDash for f in _fruit(playable_beatmap)] == [False, False]
 
 
 def test_an_unreachable_fruit_becomes_a_hyper_dash():
     """A dash across the playfield in a fraction of a second cannot be run."""
     beatmap = convert(fruits_at(0.0, PLAYFIELD_WIDTH, gap=100.0), cs=4.0)
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter,
+        CatchBeatmapProcessor,
+    )
 
-    assert _fruit(beatmap)[0].HyperDash is True
+    assert _fruit(playable_beatmap)[0].HyperDash is True
 
 
 def test_a_hyper_dash_points_at_what_it_reaches_for():
     """A hyper-dash names the object the plate has to get to."""
     beatmap = convert(fruits_at(0.0, PLAYFIELD_WIDTH, gap=100.0), cs=4.0)
-    fruit = _fruit(beatmap)
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter,
+        CatchBeatmapProcessor,
+    )
+    fruit = _fruit(playable_beatmap)
 
     assert fruit[0].HyperDashTarget is fruit[1]
     assert fruit[0].DistanceToHyperDash == 0.0
@@ -61,7 +78,11 @@ def test_a_hyper_dash_points_at_what_it_reaches_for():
 def test_a_reachable_fruit_remembers_how_much_room_was_to_spare():
     """A dash that works records what was left, because only just is hard."""
     beatmap = convert(fruits_at(200.0, 260.0), cs=4.0)
-    first = _fruit(beatmap)[0]
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter,
+        CatchBeatmapProcessor,
+    )
+    first = _fruit(playable_beatmap)[0]
 
     assert first.HyperDash is False
     assert first.DistanceToHyperDash > 0.0
@@ -70,16 +91,30 @@ def test_a_reachable_fruit_remembers_how_much_room_was_to_spare():
 def test_the_last_fruit_is_never_a_hyper_dash():
     """There is nothing after the last fruit to dash towards."""
     beatmap = convert(fruits_at(0.0, PLAYFIELD_WIDTH, 0.0, gap=100.0), cs=4.0)
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter,
+        CatchBeatmapProcessor,
+    )
 
-    assert _fruit(beatmap)[-1].HyperDash is False
+    assert _fruit(playable_beatmap)[-1].HyperDash is False
 
 
 def test_a_narrower_plate_turns_dashes_into_hyper_dashes():
     """The same beatmap at a higher circle size needs more hyper-dashes."""
     objects = fruits_at(0.0, 200.0, 0.0, 200.0, gap=150.0)
+    beatmap1 = convert(objects, 0.0)
+    beatmap2 = convert(objects, 9.0)
+    playable_beatmap1 = beatmap1.GetPlayableBeatmap(
+        CatchBeatmapConverter,
+        CatchBeatmapProcessor,
+    )
+    playable_beatmap2 = beatmap2.GetPlayableBeatmap(
+        CatchBeatmapConverter,
+        CatchBeatmapProcessor,
+    )
 
-    wide = sum(f.HyperDash for f in _fruit(convert(objects, cs=0.0)))
-    narrow = sum(f.HyperDash for f in _fruit(convert(objects, cs=9.0)))
+    wide = sum(f.HyperDash for f in _fruit(playable_beatmap1))
+    narrow = sum(f.HyperDash for f in _fruit(playable_beatmap2))
 
     assert wide == 0
     assert narrow == 3
@@ -88,15 +123,20 @@ def test_a_narrower_plate_turns_dashes_into_hyper_dashes():
 def test_bananas_are_scattered_the_same_way_every_time():
     """The scatter comes from a fixed seed, so a beatmap always replays."""
     objects = "256,192,1000,12,0,3000\n"
+    beatmap = convert(objects)
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter,
+        CatchBeatmapProcessor,
+    )
 
     first = [
         h.EffectiveX
-        for h in GetPalpableObjects(convert(objects).HitObjects)
+        for h in GetPalpableObjects(playable_beatmap.HitObjects)
         if isinstance(h, Banana)
     ]
     second = [
         h.EffectiveX
-        for h in GetPalpableObjects(convert(objects).HitObjects)
+        for h in GetPalpableObjects(playable_beatmap.HitObjects)
         if isinstance(h, Banana)
     ]
 
@@ -107,8 +147,12 @@ def test_bananas_are_scattered_the_same_way_every_time():
 def test_hard_rock_moves_the_fruit():
     """Hard rock nudges fruit sideways as well as raising the settings."""
     objects = fruits_at(100.0, 100.0, 140.0, 180.0, gap=200.0)
+    beatmap = convert(objects)
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor
+    )
 
-    plain = [f.EffectiveX for f in _fruit(convert(objects))]
+    plain = [f.EffectiveX for f in _fruit(playable_beatmap)]
     hard = [f.EffectiveX for f in _fruit(convert(objects, mods=[CatchModHardRock()]))]
 
     assert plain != hard
@@ -118,8 +162,12 @@ def test_hard_rock_moves_the_fruit():
 def test_hard_rock_leaves_a_distant_fruit_alone():
     """A fruit more than a second after the last one is not nudged."""
     objects = fruits_at(100.0, 260.0, gap=2000.0)
+    beatmap = convert(objects)
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor
+    )
 
-    plain = [f.EffectiveX for f in _fruit(convert(objects))]
+    plain = [f.EffectiveX for f in _fruit(playable_beatmap)]
     hard = [f.EffectiveX for f in _fruit(convert(objects, mods=[CatchModHardRock()]))]
 
     assert plain == hard
@@ -130,7 +178,10 @@ def test_a_banana_shower_starts_a_new_combo_after_it():
     beatmap = convert(
         "100,192,1000,1,0\n256,192,1500,12,0,2500\n100,192,3000,1,0\n"
     )
-    after = [h for h in beatmap.HitObjects if isinstance(h, Fruit)][-1]
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor
+    )
+    after = [h for h in playable_beatmap.HitObjects if isinstance(h, Fruit)][-1]
 
     assert after.NewCombo is True
 
@@ -138,7 +189,10 @@ def test_a_banana_shower_starts_a_new_combo_after_it():
 def test_every_object_knows_where_it_sits_in_the_beatmap():
     """Nested objects carry the index of the object they came from."""
     beatmap = convert(fruits_at(100.0, 200.0) + "0,192,2500,2,0,L|100:192,1,100\n")
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor
+    )
 
-    assert [h.IndexInBeatmap for h in beatmap.HitObjects] == [0, 1, 2]
-    stream = beatmap.HitObjects[2]
+    assert [h.IndexInBeatmap for h in playable_beatmap.HitObjects] == [0, 1, 2]
+    stream = playable_beatmap.HitObjects[2]
     assert all(n.IndexInBeatmap == 2 for n in stream.NestedHitObjects)

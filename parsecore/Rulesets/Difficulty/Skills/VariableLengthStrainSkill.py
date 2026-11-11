@@ -32,6 +32,7 @@ from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
 )
 from parsecore.Rulesets.Difficulty.Skills.Skill import Skill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,13 +52,38 @@ class StrainPeak:
         """
         return StrainPeak(value, round(section_length))
 
+    def __lt__(self, other: StrainPeak):
+        """Compare two strain peaks for sorting in descending order.
+
+        Args:
+            other: The other strain peak to compare against.
+
+        Returns:
+            True if this peak's value is greater than the other's.
+        """
+        return self.Value > other.Value
+
+    def __eq__(self, other: object) -> bool:
+        """Check if two strain peaks have identical values.
+
+        Args:
+            other: The object to compare with.
+
+        Returns:
+            True if both objects are StrainPeak instances with equal values.
+        """
+        if not isinstance(other, StrainPeak):
+            raise NotImplementedError
+
+        return self.Value == other.Value
+
 
 class VariableLengthStrainSkill(Skill):
     """A strain skill with sections that end on peaks rather than on a grid."""
 
     def __init__(
         self,
-        mods: list | None = None,
+        mods: list[Mod],
         decay_weight: float = 0.9,
         max_section_length: int = 400,
     ) -> None:
@@ -233,7 +259,7 @@ class VariableLengthStrainSkill(Skill):
         # The top strain if every strain were identical.
         consistent_top_strain = difficulty_value * (1 - self.DecayWeight)
 
-        if consistent_top_strain == 0:
+        if consistent_top_strain == 0.0:
             return float(len(self.ObjectDifficulties))
 
         return sum(

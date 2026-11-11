@@ -29,6 +29,7 @@ from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
 from parsecore.Rulesets.Difficulty.Skills.StrainDecaySkill import StrainDecaySkill
+from parsecore.Rulesets.Mods.Mod import Mod
 
 
 class Movement(StrainDecaySkill):
@@ -39,6 +40,14 @@ class Movement(StrainDecaySkill):
 
     DecayWeight = 0.94
     SectionLength = 750
+    
+    def __init__(self, mods: list[Mod]) -> None:
+        """Create a movement skill evaluator.
+
+        Args:
+            mods: The mods applied to the beatmap.
+        """
+        super().__init__(mods)
 
     def StrainValueOf(self, current: DifficultyHitObject) -> float:
         """Return how much movement strain an object adds.

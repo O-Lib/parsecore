@@ -24,21 +24,21 @@ SOFTWARE.
 
 from __future__ import annotations
 
-import math
-
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
 from parsecore.Rulesets.Difficulty.Skills.StrainSkill import StrainSkill
+from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
 
 
 class StrainDecaySkill(StrainSkill):
     """A strain skill that decays towards zero between objects."""
 
-    SkillMultiplier = 1.0
-    StrainDecayBase = 0.15
+    SkillMultiplier: float
+    StrainDecayBase: float
 
-    def __init__(self, mods: list | None = None) -> None:
+    def __init__(self, mods: list[Mod]) -> None:
         """Create a strain decay skill.
 
         Args:
@@ -85,4 +85,4 @@ class StrainDecaySkill(StrainSkill):
         Args:
             ms: The elapsed time in milliseconds.
         """
-        return math.pow(self.StrainDecayBase, ms / 1000.0)
+        return DiffUtils.Pow(self.StrainDecayBase, ms / 1000.0)

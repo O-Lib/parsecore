@@ -26,11 +26,13 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from parsecore.Rulesets.Objects.Types.IHasXPosition import IHasXPosition
+from parsecore.Rulesets.Objects.Types.IHasYPosition import IHasYPosition
 from parsecore.Utils.Vector2 import Vector2
 
 
 @runtime_checkable
-class IHasPosition(Protocol):
+class IHasPosition(IHasXPosition, IHasYPosition, Protocol):
     """An object with a position on the playfield."""
 
     Position: Vector2

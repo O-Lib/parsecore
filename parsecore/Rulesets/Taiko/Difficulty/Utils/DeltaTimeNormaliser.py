@@ -24,8 +24,14 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+    TaikoDifficultyHitObject,
+)
 
-def Normalise(hit_objects: list, margin_of_error: float) -> dict:
+
+def Normalise(
+        hit_objects: list[TaikoDifficultyHitObject], margin_of_error: float
+) -> dict[TaikoDifficultyHitObject, float]:
     """Return each object's spacing, replaced by its neighbourhood's median.
 
     Spacings are collected, sorted, and split wherever the next one is further
@@ -42,7 +48,7 @@ def Normalise(hit_objects: list, margin_of_error: float) -> dict:
     delta_times = sorted({h.DeltaTime for h in hit_objects})
 
     sets: list[list[float]] = []
-    current: list[float] | None = None
+    current = None
 
     for value in delta_times:
         if current is not None and abs(value - current[0]) <= margin_of_error:
@@ -52,7 +58,7 @@ def Normalise(hit_objects: list, margin_of_error: float) -> dict:
         current = [value]
         sets.append(current)
 
-    median_lookup: dict[float, float] = {}
+    median_lookup = {}
 
     for group in sets:
         group.sort()

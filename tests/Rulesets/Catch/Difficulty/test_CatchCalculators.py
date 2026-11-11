@@ -143,11 +143,12 @@ def _play(path, acronyms):
     """
     mods = [MODS[a]() for a in acronyms]
     decoded = LegacyBeatmapDecoder.FromPath(str(path))
-    playable = WorkingBeatmap(decoded).GetPlayableBeatmap(
+    playable = WorkingBeatmap(decoded)
+    playable_beatmap = playable.GetPlayableBeatmap(
         CatchBeatmapConverter, CatchBeatmapProcessor, mods
     )
 
-    palpable = list(GetPalpableObjects(playable.HitObjects))
+    palpable = GetPalpableObjects(playable_beatmap.HitObjects)
     fruits = sum(1 for h in palpable if isinstance(h, Fruit))
     droplets = sum(
         1
@@ -162,7 +163,7 @@ def _play(path, acronyms):
 
     score = ScoreInfo(
         Mods=mods,
-        BeatmapDifficulty=decoded.Difficulty,
+        BeatmapInfo=decoded.BeatmapInfo,
         MaxCombo=attributes.MaxCombo,
         Accuracy=1.0,
         Statistics={
@@ -220,9 +221,7 @@ def test_a_faster_beatmap_is_harder():
     objects = fruits_at(50.0, 250.0, 50.0, 250.0, gap=300.0)
 
     plain = CatchDifficultyCalculator(convert(objects)).Calculate([])
-    fast = CatchDifficultyCalculator(
-        convert(objects, mods=[ModDoubleTime()])
-    ).Calculate([ModDoubleTime()])
+    fast = CatchDifficultyCalculator(convert(objects)).Calculate([ModDoubleTime()])
 
     assert fast.StarRating > plain.StarRating
 
@@ -247,9 +246,13 @@ def test_missing_everything_is_worth_nothing():
     beatmap = convert(fruits_at(*[i * 30.0 for i in range(10)]))
     attributes = CatchDifficultyCalculator(beatmap).Calculate([])
 
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor, []
+    )
+
     score = ScoreInfo(
         Mods=[],
-        BeatmapDifficulty=beatmap.Difficulty,
+        BeatmapInfo=playable_beatmap.BeatmapInfo,
         MaxCombo=0,
         Accuracy=0.0,
         Statistics={HitResult.Miss: 10},

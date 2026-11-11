@@ -24,6 +24,7 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Audio.HitSampleInfo import HitSampleInfo, LegacyHitSampleInfo
 from parsecore.Beatmaps.ControlPoints import DifficultyControlPoint as _difficulty
 from parsecore.Beatmaps.ControlPoints import SampleControlPoint as _sample
 from parsecore.Beatmaps.ControlPoints.ControlPoint import ControlPoint
@@ -44,18 +45,18 @@ class LegacyControlPointInfo(ControlPointInfo):
     def __init__(self) -> None:
         """Create an empty set of legacy control points."""
         super().__init__()
-        self.DifficultyPoints: list[DifficultyControlPoint] = []
-        self.SamplePoints: list[SampleControlPoint] = []
+        self.difficultyPoints: list[DifficultyControlPoint] = []
+        self.samplePoints: list[SampleControlPoint] = []
 
     @property
-    def AllControlPoints(self) -> list[ControlPoint]:
-        """Return every control point, in no particular order."""
-        return [
-            *self.TimingPoints,
-            *self.EffectPoints,
-            *self.DifficultyPoints,
-            *self.SamplePoints,
-        ]
+    def DifficultyPoints(self) -> list[DifficultyControlPoint]:
+        """Return all difficulty control points sorted by time."""
+        return sorted(self.difficultyPoints, key=lambda dp: dp.Time)
+
+    @property
+    def SamplePoints(self) -> list[SampleControlPoint]:
+        """Return all sample control points sorted by time."""
+        return sorted(self.samplePoints, key=lambda sp: sp.Time)
 
     def DifficultyPointAt(self, time: float) -> DifficultyControlPoint:
         """Return the difficulty point in effect at ``time``.
@@ -82,17 +83,29 @@ class LegacyControlPointInfo(ControlPointInfo):
         self.DifficultyPoints.clear()
         self.SamplePoints.clear()
 
-    def _list_for(self, control_point: ControlPoint) -> list | None:
-        """Return the list a control point belongs in, if any.
+    def GroupItemAdded(self, control_point: ControlPoint) -> None:
+        """Handle internal list updates when a control point is added to a group.
 
         Args:
-            control_point: The point to place.
+            control_point: The added control point.
         """
         if isinstance(control_point, DifficultyControlPoint):
-            return self.DifficultyPoints
-        if isinstance(control_point, SampleControlPoint):
-            return self.SamplePoints
-        return super()._list_for(control_point)
+            self.difficultyPoints.append(control_point)
+        elif isinstance(control_point, SampleControlPoint):
+            self.samplePoints.append(control_point)
+        super().GroupItemAdded(control_point)
+
+    def GroupItemRemoved(self, control_point: ControlPoint) -> None:
+        """Handle internal list updates when a control point is removed from a group.
+
+        Args:
+            control_point: The removed control point.
+        """
+        if isinstance(control_point, DifficultyControlPoint):
+            self.difficultyPoints.remove(control_point)
+        elif isinstance(control_point, SampleControlPoint):
+            self.samplePoints.remove(control_point)
+        super().GroupItemRemoved(control_point)
 
     def _check_already_existing(self, time: float, new_point: ControlPoint) -> bool:
         """Return whether ``new_point`` would be redundant at ``time``.
@@ -106,7 +119,72 @@ class LegacyControlPointInfo(ControlPointInfo):
             return new_point.IsRedundant(existing)
         if isinstance(new_point, SampleControlPoint):
             existing = _binary_search(self.SamplePoints, time)
-            if existing is None:
-                return False
             return new_point.IsRedundant(existing)
+
         return super()._check_already_existing(time, new_point)
+
+
+class LegacySampleControlPoint(SampleControlPoint):
+    """A sample control point supporting legacy custom sample banks and volume overrides."""
+    
+    def __init__(self) -> None:
+        """Create a legacy sample control point with default attributes."""
+        self.CustomSampleBank = 0
+
+    def ApplyTo(self, hit_sample_info: HitSampleInfo) -> HitSampleInfo:
+        """Apply sample settings to a hit sample info instance.
+
+        Args:
+            hit_sample_info: The hit sample info to modify.
+
+        Returns:
+            The updated hit sample info with custom sample bank and volume applied.
+        """
+        if isinstance(hit_sample_info, LegacyHitSampleInfo):
+            custom_sample_bank = self.CustomSampleBank
+            if hit_sample_info.CustomSampleBank > 0:
+                custom_sample_bank = hit_sample_info.CustomSampleBank
+
+            volume = self.SampleVolume
+            if hit_sample_info.Volume > 0:
+                volume = hit_sample_info.Volume
+
+            bank = self.SampleBank
+            if hit_sample_info.BankSpecified:
+                bank = hit_sample_info.Bank
+
+            return hit_sample_info.WithCustomBank(
+                CustomSampleBank=custom_sample_bank,
+                Volume=volume,
+                Bank=bank
+            )
+
+        return super().ApplyTo(hit_sample_info)
+    
+    def IsRedundant(self, existing: ControlPoint | None) -> bool:
+        """Check whether this control point is redundant compared to an existing one.
+
+        Args:
+            existing: The active control point to compare against.
+
+        Returns:
+            ``True`` if properties match the existing control point.
+        """
+        return (
+            super().IsRedundant(existing)
+            and isinstance(existing, LegacySampleControlPoint)
+            and self.CustomSampleBank == existing.CustomSampleBank
+        )
+
+    def __eq__(self, value: object) -> bool:
+        """Check equality with another legacy sample control point.
+
+        Args:
+            value: The object to compare with.
+
+        Returns:
+            ``True`` if base sample properties and custom sample bank match.
+        """
+        if not isinstance(value, LegacySampleControlPoint):
+            raise NotImplementedError
+        return super().__eq__(value) and self.CustomSampleBank == value.CustomSampleBank

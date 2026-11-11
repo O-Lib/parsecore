@@ -46,8 +46,6 @@ from parsecore.Rulesets.Mods.ModFactory import (
     GetModsFor,
     UnknownModError,
 )
-from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapConverter import OsuBeatmapConverter
-from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapProcessor import OsuBeatmapProcessor
 from parsecore.Rulesets.Osu.Difficulty.OsuDifficultyCalculator import (
     OsuDifficultyCalculator,
 )
@@ -130,11 +128,11 @@ def test_no_acronyms_means_no_mods():
 
 def test_settings_reach_the_constructor():
     """A mod that takes a setting is built with it."""
-    mod = CreateModFromAcronym("CL", 0, no_slider_head_accuracy=False)
+    mod = CreateModFromAcronym("CL", 0, NoSliderHeadAccuracy=False)
     assert mod.NoSliderHeadAccuracy is False
 
     (built,) = CreateModsFromAcronyms(
-        ["CL"], 0, settings={"CL": {"no_slider_head_accuracy": False}}
+        ["CL"], 0, settings={"CL": {"NoSliderHeadAccuracy": False}}
     )
     assert built.NoSliderHeadAccuracy is False
 
@@ -189,10 +187,8 @@ def test_both_ways_of_naming_a_mod_rate_the_same(beatmap_files, acronyms, classe
     saying the same, never another way of arriving somewhere else.
     """
     def rate(decoded, mods):
-        playable = WorkingBeatmap(decoded).GetPlayableBeatmap(
-            OsuBeatmapConverter, OsuBeatmapProcessor, mods
-        )
-        return OsuDifficultyCalculator(playable, decoded).Calculate(mods).StarRating
+        playable = WorkingBeatmap(decoded)
+        return OsuDifficultyCalculator(playable).Calculate(mods).StarRating
 
     rated = 0
     for path in beatmap_files:

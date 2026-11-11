@@ -24,11 +24,18 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import TypeVar
+
+from parsecore.Rulesets.Taiko.Difficulty.Utils.IHasInterval import IHasInterval
+from parsecore.Utils.Precision import AlmostEquals
+
 # How far two intervals may differ and still count as the same rhythm.
 MARGIN_OF_ERROR = 5.0
 
+T = TypeVar("T", bound=IHasInterval)
 
-def GroupByInterval(objects: list) -> list[list]:
+
+def GroupByInterval(objects: list[T]) -> list[list[T]]:
     """Split a run of objects into groups that share a spacing.
 
     Args:
@@ -37,7 +44,7 @@ def GroupByInterval(objects: list) -> list[list]:
     Returns:
         The groups, in order.
     """
-    groups: list[list] = []
+    groups: list[list[T]] = []
 
     index = 0
     while index < len(objects):
@@ -47,7 +54,7 @@ def GroupByInterval(objects: list) -> list[list]:
     return groups
 
 
-def _create_next_group(objects: list, index: int) -> tuple[list, int]:
+def _create_next_group(objects: list[T], index: int) -> tuple[list[T], int]:
     """Take objects from ``index`` for as long as their spacing holds.
 
     A group runs until the spacing changes. Where the spacing grows, the object
@@ -65,7 +72,7 @@ def _create_next_group(objects: list, index: int) -> tuple[list, int]:
     index += 1
 
     while index < len(objects) - 1:
-        if abs(objects[index].Interval - objects[index + 1].Interval) > MARGIN_OF_ERROR:
+        if not AlmostEquals(objects[index].Interval, objects[index + 1].Interval, MARGIN_OF_ERROR):
             if objects[index + 1].Interval > objects[index].Interval + MARGIN_OF_ERROR:
                 grouped.append(objects[index])
                 index += 1
@@ -78,7 +85,7 @@ def _create_next_group(objects: list, index: int) -> tuple[list, int]:
     if (
         len(objects) > 2
         and index < len(objects)
-        and abs(objects[-1].Interval - objects[-2].Interval) <= MARGIN_OF_ERROR
+        and AlmostEquals(objects[-1].Interval, objects[-2].Interval, MARGIN_OF_ERROR)
     ):
         grouped.append(objects[index])
         index += 1

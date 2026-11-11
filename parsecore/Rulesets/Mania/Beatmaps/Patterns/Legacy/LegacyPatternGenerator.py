@@ -26,7 +26,11 @@ from __future__ import annotations
 
 import math
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Rulesets.Mania.Beatmaps.Patterns.Pattern import Pattern
 from parsecore.Rulesets.Mania.Beatmaps.Patterns.PatternGenerator import PatternGenerator
+from parsecore.Rulesets.Objects.HitObject import HitObject
+from parsecore.Utils.LegacyRandom import LegacyRandom
 from parsecore.Utils.Vector2 import f32
 
 
@@ -42,7 +46,12 @@ class LegacyPatternGenerator(PatternGenerator):
     """The base of the generators osu!stable converted beatmaps with."""
 
     def __init__(
-        self, random, hit_object, beatmap, total_columns: int, previous_pattern
+            self,
+            random: LegacyRandom,
+            hit_object: HitObject,
+            beatmap: Beatmap,
+            total_columns: int,
+            previous_pattern: Pattern
     ) -> None:
         """Create a generator for one object.
 
@@ -149,8 +158,9 @@ class LegacyPatternGenerator(PatternGenerator):
             settings / 1.5 + len(hit_objects) / drain_time * 9.0
         ) / 38.0 * 5.0 / 1.15
 
-        self._conversion_difficulty = min(value, 12.0)
-        return self._conversion_difficulty
+        conversion_difficulty = min(value, 12.0)
+        self._conversion_difficulty = conversion_difficulty
+        return conversion_difficulty
 
     def FindAvailableColumn(
         self,

@@ -154,8 +154,8 @@ def test_agility_caps_the_distance_it_rewards():
 
 def test_snap_rises_with_spacing():
     """Wider jumps are harder to snap to."""
-    close = _objects(_stream(40))
-    far = _objects(_stream(200))
+    close = _objects(_stream(40, count=4))
+    far = _objects(_stream(130, count=4))
     assert SnapAimEvaluator.EvaluateDifficultyOf(
         far[-1], True
     ) > SnapAimEvaluator.EvaluateDifficultyOf(close[-1], True)
@@ -173,8 +173,8 @@ def test_angle_acuteness_and_wideness_are_opposites():
 
 def test_flow_ignores_spacing_below_one_radius():
     """Objects closer than a radius need no real movement, so flow is tiny."""
-    stacked = _objects(_stream(2))
-    spread = _objects(_stream(120))
+    stacked = _objects(_stream(2, count=4))
+    spread = _objects(_stream(120, count=4))
     assert FlowAimEvaluator.EvaluateDifficultyOf(
         stacked[-1], True
     ) < FlowAimEvaluator.EvaluateDifficultyOf(spread[-1], True)

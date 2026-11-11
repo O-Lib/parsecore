@@ -26,12 +26,14 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from parsecore.Beatmaps.BeatmapConverter import BeatmapConverter
+
 
 @runtime_checkable
 class IApplicableToBeatmapConverter(Protocol):
     """A mod that adjusts a converter before it runs."""
 
-    def ApplyToBeatmapConverter(self, beatmap_converter) -> None:
+    def ApplyToBeatmapConverter(self, beatmap_converter: BeatmapConverter) -> None:
         """Adjust the converter in place.
 
         Args:

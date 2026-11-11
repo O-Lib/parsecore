@@ -26,9 +26,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from parsecore.Beatmaps.IBeatmapMetadataInfo import IBeatmapMetadataInfo
+
 
 @dataclass(slots=True)
-class BeatmapMetadata:
+class BeatmapMetadata(IBeatmapMetadataInfo):
     """Title, artist, creator and the files a beatmap references."""
 
     Title: str = ""

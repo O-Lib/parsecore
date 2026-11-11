@@ -25,15 +25,20 @@ SOFTWARE.
 from __future__ import annotations
 
 import bisect
+from collections.abc import Callable
+from typing import TypeVar
 
 from parsecore.Beatmaps.ControlPoints import EffectControlPoint as _effect
 from parsecore.Beatmaps.ControlPoints import TimingControlPoint as _timing
 from parsecore.Beatmaps.ControlPoints.ControlPoint import ControlPoint
 from parsecore.Beatmaps.ControlPoints.EffectControlPoint import EffectControlPoint
+from parsecore.Beatmaps.ControlPoints.IControlPoint import IControlPoint
 from parsecore.Beatmaps.ControlPoints.TimingControlPoint import TimingControlPoint
 
+T = TypeVar("T", bound=IControlPoint)
 
-def _binary_search(points: list, time: float):
+
+def _binary_search(points: list[T], time: float) -> T | None:
     """Return the last point at or before ``time``, or ``None``.
 
     Args:
@@ -48,7 +53,7 @@ def _binary_search(points: list, time: float):
     return points[idx - 1]
 
 
-def _binary_search_with_fallback(points: list, time: float, fallback):
+def _binary_search_with_fallback(points: list[T], time: float, fallback: T) -> T:
     """Return the point in effect at ``time``, or ``fallback``.
 
     Args:
@@ -72,6 +77,9 @@ class ControlPointGroup:
         self.Time = time
         self.ControlPoints: list[ControlPoint] = []
 
+        self._item_added: list[Callable[[ControlPoint], None]] = []
+        self._item_removed: list[Callable[[ControlPoint], None]] = []
+
     def Add(self, control_point: ControlPoint) -> None:
         """Add a point, replacing any of the same kind already in the group.
 
@@ -83,7 +91,22 @@ class ControlPointGroup:
                 self.ControlPoints.remove(existing)
                 break
 
+        control_point.AttachGroup(self)
         self.ControlPoints.append(control_point)
+
+        for handler in self._item_added:
+            handler(control_point)
+
+    def Remove(self, control_point: ControlPoint) -> None:
+        """Remove a control point from this group and notify listeners.
+
+        Args:
+            control_point: The control point to remove.
+        """
+        self.ControlPoints.remove(control_point)
+
+        for handler in self._item_removed:
+            handler(control_point)
 
     def __lt__(self, other: ControlPointGroup) -> bool:
         """Order groups by time."""
@@ -95,13 +118,24 @@ class ControlPointInfo:
 
     def __init__(self) -> None:
         """Create an empty set of control points."""
-        self.TimingPoints: list[TimingControlPoint] = []
-        self.EffectPoints: list[EffectControlPoint] = []
+        self.timingPoints: list[TimingControlPoint] = []
+        self.effectPoints: list[EffectControlPoint] = []
+        self.groups: list[ControlPointGroup] = []
+
+    @property
+    def TimingPoints(self) -> list[TimingControlPoint]:
+        """Return all timing control points sorted by time."""
+        return sorted(self.timingPoints, key=lambda tp: tp.Time)
+
+    @property
+    def EffectPoints(self) -> list[EffectControlPoint]:
+        """Return all effect control points sorted by time."""
+        return sorted(self.effectPoints, key=lambda ep: ep.Time)
 
     @property
     def AllControlPoints(self) -> list[ControlPoint]:
         """Return every control point, in no particular order."""
-        return [*self.TimingPoints, *self.EffectPoints]
+        return [cp for group in self.Groups for cp in group.ControlPoints]
 
     def TimingPointAt(self, time: float) -> TimingControlPoint:
         """Return the timing point in effect at ``time``.
@@ -131,16 +165,7 @@ class ControlPointInfo:
         osu! stores its points this way round and the encoder walks them in
         that shape, so the groups are built here on demand.
         """
-        by_time: dict[float, ControlPointGroup] = {}
-
-        for control_point in self.AllControlPoints:
-            group = by_time.get(control_point.Time)
-            if group is None:
-                group = ControlPointGroup(control_point.Time)
-                by_time[control_point.Time] = group
-            group.Add(control_point)
-
-        return [by_time[time] for time in sorted(by_time)]
+        return self.groups
 
     @property
     def BPMMaximum(self) -> float:
@@ -156,55 +181,94 @@ class ControlPointInfo:
             return 60000.0 / _timing.DEFAULT_BEAT_LENGTH
         return 60000.0 / max(p.BeatLength for p in self.TimingPoints)
 
-    def Add(
-        self, time: float, control_point: ControlPoint, skip_if_redundant: bool = True
-    ) -> bool:
+    def Add(self, time: float, control_point: ControlPoint) -> bool:
         """Insert a control point at ``time``, keeping the list sorted.
 
         Args:
             time: The point's time in milliseconds.
             control_point: The point to add.
-            skip_if_redundant: Whether to drop points that change nothing.
 
         Returns:
             ``True`` if the point was added.
         """
         control_point.Time = time
 
-        if skip_if_redundant and self._check_already_existing(time, control_point):
+        if self._check_already_existing(time, control_point):
             return False
 
-        self._insert(control_point)
+        self.GroupAt(time, True).Add(control_point)
         return True
+
+    def RemoveGroup(self, group: ControlPointGroup) -> None:
+        """Remove a control point group and clear its contained points.
+
+        Args:
+            group: The control point group to remove.
+        """
+        for control_point in group.ControlPoints:
+            group.Remove(control_point)
+
+        self.groups.remove(group)
 
     def Clear(self) -> None:
         """Remove every control point."""
-        self.TimingPoints.clear()
-        self.EffectPoints.clear()
+        self.groups.clear()
+        self.timingPoints.clear()
+        self.effectPoints.clear()
 
-    def _list_for(self, control_point: ControlPoint) -> list | None:
-        """Return the list a control point belongs in, if any.
+    def GroupAt(self, time: float, add_if_no_existing: bool = False) -> ControlPointGroup | None:
+        """Return the control point group at the specified time.
 
         Args:
-            control_point: The point to place.
+            time: The lookup time in milliseconds.
+            add_if_no_existing: Whether to create and insert a new group if none exists.
+
+        Returns:
+            The existing or newly created group, or ``None`` if not found and not created.
         """
-        if isinstance(control_point, TimingControlPoint):
-            return self.TimingPoints
-        if isinstance(control_point, EffectControlPoint):
-            return self.EffectPoints
+        new_group = ControlPointGroup(time)
+        index = bisect.bisect_left(self.groups, new_group)
+
+        if index < len(self.groups) and self.groups[index].Time == time:
+            return self.groups[index]
+
+        if add_if_no_existing:
+            new_group._item_added.append(self.GroupItemAdded)
+            new_group._item_removed.append(self.GroupItemRemoved)
+
+            self.groups.insert(index, new_group)
+            return new_group
+
         return None
 
-    def _insert(self, control_point: ControlPoint) -> None:
-        """Insert a point into its list at the correct time position.
+    def DeepClone(self) -> ControlPointInfo:
+        """Return a deep copy of this control point info structure."""
+        control_point_info = ControlPointInfo()
+        for point in self.AllControlPoints:
+            control_point_info.Add(point.Time, point.DeepClone())
+        return control_point_info
+
+    def GroupItemAdded(self, control_point: ControlPoint) -> None:
+        """Handle internal list updates when a control point is added to a group.
 
         Args:
-            control_point: The point to insert.
+            control_point: The added control point.
         """
-        target = self._list_for(control_point)
-        if target is None:
-            return
-        idx = bisect.bisect_right([p.Time for p in target], control_point.Time)
-        target.insert(idx, control_point)
+        if isinstance(control_point, TimingControlPoint):
+            self.timingPoints.append(control_point)
+        elif isinstance(control_point, EffectControlPoint):
+            self.effectPoints.append(control_point)
+
+    def GroupItemRemoved(self, control_point: ControlPoint) -> None:
+        """Handle internal list updates when a control point is removed from a group.
+
+        Args:
+            control_point: The removed control point.
+        """
+        if isinstance(control_point, TimingControlPoint):
+            self.timingPoints.remove(control_point)
+        elif isinstance(control_point, EffectControlPoint):
+            self.effectPoints.remove(control_point)
 
     def _check_already_existing(self, time: float, new_point: ControlPoint) -> bool:
         """Return whether ``new_point`` would be redundant at ``time``.
@@ -213,7 +277,7 @@ class ControlPointInfo:
             time: The point's time in milliseconds.
             new_point: The point about to be added.
         """
-        existing = None
+        existing: ControlPoint | None = None
 
         if isinstance(new_point, TimingControlPoint):
             # Timing points compare against an exact predecessor only.
@@ -221,6 +285,4 @@ class ControlPointInfo:
         elif isinstance(new_point, EffectControlPoint):
             existing = self.EffectPointAt(time)
 
-        if existing is None:
-            return False
         return new_point.IsRedundant(existing)

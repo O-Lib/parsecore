@@ -24,32 +24,22 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Legacy.LegacyHitObjectType import LegacyHitObjectType
 from parsecore.Rulesets.Objects.Legacy.ConvertHitObject import ConvertHitObject
-from parsecore.Utils.Vector2 import Vector2
+from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
 
 
-class ConvertHold(ConvertHitObject):
+class ConvertHold(ConvertHitObject, IHasDuration):
     """A note held down for a duration."""
 
-    def __init__(self, start_time: float = 0.0, end_time: float = 0.0,
-                 position: Vector2 | None = None) -> None:
-        """Create a hold note.
+    def __init__(self) -> None:
+        """Create a hold note."""
 
-        Args:
-            start_time: The note's start in milliseconds.
-            end_time: The note's end in milliseconds.
-            position: The note's position, which encodes its mania column.
-        """
-        super().__init__(start_time)
-        self.EndTime: float = end_time
-        self.Position: Vector2 = position or Vector2()
+        super().__init__()
+        self.LegacyType = LegacyHitObjectType.Hold
+        self.Duration: float = 0.0
 
     @property
-    def X(self) -> float:
-        """Return the note's x position."""
-        return self.Position.X
-
-    @property
-    def Duration(self) -> float:
-        """Return how long the note is held."""
-        return self.EndTime - self.StartTime
+    def EndTime(self) -> float:
+        """Return the end time of the hold note in milliseconds."""
+        return self.StartTime + self.Duration

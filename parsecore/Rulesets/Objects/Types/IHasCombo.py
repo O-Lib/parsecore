@@ -31,5 +31,5 @@ from typing import Protocol, runtime_checkable
 class IHasCombo(Protocol):
     """An object that can start a new combo."""
 
-    new_combo: bool
-    combo_offset: int
+    NewCombo: bool
+    ComboOffset: int

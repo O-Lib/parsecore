@@ -28,6 +28,7 @@ from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
 from parsecore.Rulesets.Difficulty.Skills.StrainDecaySkill import StrainDecaySkill
+from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Taiko.Difficulty.Evaluators import ColourEvaluator
 
 
@@ -36,6 +37,14 @@ class Colour(StrainDecaySkill):
 
     SkillMultiplier = 0.12
     StrainDecayBase = 0.8
+
+    def __init__(self, mods: list[Mod]) -> None:
+        """Create the colour skill.
+
+        Args:
+            mods: The mods the score was set with.
+        """
+        super().__init__(mods)
 
     def StrainValueOf(self, current: DifficultyHitObject) -> float:
         """Return how much colour strain an object adds.

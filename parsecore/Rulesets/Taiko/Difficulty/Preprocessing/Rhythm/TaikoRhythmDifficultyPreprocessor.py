@@ -30,12 +30,15 @@ from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Rhythm.Data.SamePatternsG
 from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Rhythm.Data.SameRhythmHitObjectGrouping import (
     SameRhythmHitObjectGrouping,
 )
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+    TaikoDifficultyHitObject,
+)
 from parsecore.Rulesets.Taiko.Difficulty.Utils.IntervalGroupingUtils import (
     GroupByInterval,
 )
 
 
-def ProcessAndAssign(hit_objects: list) -> None:
+def ProcessAndAssign(hit_objects: list[TaikoDifficultyHitObject]) -> None:
     """Group the beatmap's rhythms and give every note its groupings.
 
     Args:
@@ -53,7 +56,7 @@ def ProcessAndAssign(hit_objects: list) -> None:
 
 
 def _create_same_rhythm_grouped_hit_objects(
-    hit_objects: list,
+    hit_objects: list[TaikoDifficultyHitObject],
 ) -> list[SameRhythmHitObjectGrouping]:
     """Split the notes into runs that share a spacing.
 

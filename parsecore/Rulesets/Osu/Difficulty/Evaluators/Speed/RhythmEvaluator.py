@@ -25,13 +25,19 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
 from parsecore.Rulesets.Osu.Difficulty.Preprocessing.OsuDifficultyHitObject import (
     MIN_DELTA_TIME,
+    OsuDifficultyHitObject,
 )
 from parsecore.Rulesets.Osu.Objects.Slider import Slider
 from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
+from parsecore.Utils.Precision import Clamp
 
 HISTORY_TIME_MAX = 5 * 1000
 HISTORY_OBJECTS_MAX = 32
@@ -52,11 +58,9 @@ class Island:
         """Create an island at a given spacing.
 
         Args:
-            delta: The spacing of every object in the island.
+            delta: The spacing of every object on the island.
         """
-        self.Delta = (
-            delta if delta == _INT_MAX else max(delta, int(MIN_DELTA_TIME))
-        )
+        self.Delta = max(delta, int(MIN_DELTA_TIME))
         self.DeltaCount = 1
         self.Occurrences = 1
 
@@ -76,6 +80,9 @@ class Island:
         Args:
             other: The island to compare against.
             epsilon: How far two spacings may differ and still match.
+
+        Returns:
+            True if both islands share similar spacing and parity; False otherwise.
         """
         # Islands of a single object carry no polarity.
         if self.DeltaCount <= 1 or other.DeltaCount <= 1:
@@ -91,6 +98,9 @@ class Island:
         Args:
             other: The island to compare against.
             epsilon: How far two spacings may differ and still match.
+
+        Returns:
+            True if both islands have matching spacing and count; False otherwise.
         """
         return (
             abs(self.Delta - other.Delta) < epsilon
@@ -98,7 +108,11 @@ class Island:
         )
 
     def __repr__(self) -> str:
-        """Return the island as ``delta x count``."""
+        """Return a string representation of the island.
+
+        Returns:
+            A string formatted as ``delta x count``.
+        """
         return f"{self.Delta}x{self.DeltaCount}"
 
 
@@ -110,6 +124,9 @@ def _get_effective_difficulty(delta_difference_ratio: float) -> float:
 
     Args:
         delta_difference_ratio: The ratio between two spacings.
+
+    Returns:
+        The effective difficulty value of the spacing ratio.
     """
     delta_difference_fraction = delta_difference_ratio - math.trunc(
         delta_difference_ratio
@@ -119,7 +136,7 @@ def _get_effective_difficulty(delta_difference_ratio: float) -> float:
     )
 
 
-def EvaluateDifficultyOf(current) -> float:
+def EvaluateDifficultyOf(current: DifficultyHitObject) -> float:
     """Return a rhythm multiplier for the tap difficulty of ``current``.
 
     Args:
@@ -132,7 +149,7 @@ def EvaluateDifficultyOf(current) -> float:
         return 0.0
 
     rhythm_complexity_sum = 0.0
-    delta_difference_epsilon = current.HitWindowGreat * 0.3
+    delta_difference_epsilon = cast(OsuDifficultyHitObject, current).HitWindowGreat * 0.3
 
     island = Island(_INT_MAX)
     previous_island = Island(_INT_MAX)
@@ -152,12 +169,12 @@ def EvaluateDifficultyOf(current) -> float:
     ):
         rhythm_start += 1
 
-    prev_obj = current.Previous(rhythm_start)
-    prev_prev_obj = current.Previous(rhythm_start + 1)
+    prev_obj = cast(OsuDifficultyHitObject, current.Previous(rhythm_start))
+    prev_prev_obj = cast(OsuDifficultyHitObject, current.Previous(rhythm_start + 1))
 
     # Walk forward from the furthest object back to the current one.
     for i in range(rhythm_start, 0, -1):
-        curr_obj = current.Previous(i - 1)
+        curr_obj = cast(OsuDifficultyHitObject, current.Previous(i - 1))
         if isinstance(curr_obj.BaseObject, Spinner):
             continue
 
@@ -166,7 +183,7 @@ def EvaluateDifficultyOf(current) -> float:
         time_decay = (
             HISTORY_TIME_MAX - (current.StartTime - curr_obj.StartTime)
         ) / HISTORY_TIME_MAX
-        note_decay = (historical_note_count - i) / historical_note_count
+        note_decay = float(historical_note_count - i) / historical_note_count
         curr_historical_decay = min(note_decay, time_decay)
 
         curr_delta = max(curr_obj.DeltaTime, DELTA_MIN_VALUE)
@@ -181,14 +198,11 @@ def EvaluateDifficultyOf(current) -> float:
         )
 
         # A very large ratio is easy to read, so the bonus is reduced.
-        difference_multiplier = min(max(2.0 - delta_difference_ratio / 8.0, 0.0), 1.0)
-        window_penalty = min(
-            max(
-                (delta_difference - delta_difference_epsilon)
-                / delta_difference_epsilon,
-                0.0,
-            ),
-            1.0,
+        difference_multiplier = Clamp(2.0 - delta_difference_ratio / 8.0, 0.0, 1.0)
+        window_penalty = Clamp(
+            (delta_difference - delta_difference_epsilon) / delta_difference_epsilon,
+            0.0,
+            1.0
         )
 
         effective_difficulty = (

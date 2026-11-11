@@ -24,18 +24,8 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from parsecore.Rulesets.Difficulty.DifficultyAttributes import DifficultyAttributes
+from parsecore.Rulesets.Mods.ModHalfTime import ModHalfTime
 
 
-@dataclass(slots=True)
-class TimedDifficultyAttributes:
-    """Difficulty as it stood at a given time in the beatmap."""
-
-    Time: float
-    Attributes: DifficultyAttributes
-
-    def __lt__(self, other: TimedDifficultyAttributes) -> bool:
-        """Order attributes by the time they were measured at."""
-        return self.Time < other.Time
+class OsuModHalfTime(ModHalfTime):
+    """Slower song playback for reduced difficulty."""

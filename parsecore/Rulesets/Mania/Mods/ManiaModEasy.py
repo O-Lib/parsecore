@@ -24,35 +24,41 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
 from parsecore.Rulesets.Mania.Objects.HoldNote import HoldNote
 from parsecore.Rulesets.Mania.Objects.Note import Note
+from parsecore.Rulesets.Mania.Scoring.ManiaHitWindows import ManiaHitWindows
+from parsecore.Rulesets.Mods.IApplicableToHitObject import IApplicableToHitObject
 from parsecore.Rulesets.Mods.ModEasy import ModEasy
+from parsecore.Rulesets.Objects.HitObject import HitObject
 
 # How much the hit windows are widened by.
 HIT_WINDOW_DIFFICULTY_MULTIPLIER = 1 / 1.4
 
 
-class ManiaModEasy(ModEasy):
+class ManiaModEasy(ModEasy, IApplicableToHitObject):
     """More forgiving drain, less accuracy required, and extra lives."""
 
     Description = (
         "More forgiving HP drain, less accuracy required, and extra lives!"
     )
 
-    def ApplyToHitObject(self, hit_object) -> None:
+    def ApplyToHitObject(self, hit_object: HitObject) -> None:
         """Widen the windows of a note, or of both ends of a hold.
 
         Args:
             hit_object: The object to modify.
         """
         if isinstance(hit_object, HoldNote):
-            hit_object.Head.HitWindows.DifficultyMultiplier = (
-                HIT_WINDOW_DIFFICULTY_MULTIPLIER
-            )
-            hit_object.Tail.HitWindows.DifficultyMultiplier = (
-                HIT_WINDOW_DIFFICULTY_MULTIPLIER
-            )
+            if hit_object.Head is not None and hit_object.Tail is not None:
+                cast(ManiaHitWindows, hit_object.Head.HitWindows).DifficultyMultiplier = (
+                    HIT_WINDOW_DIFFICULTY_MULTIPLIER
+                )
+                cast(ManiaHitWindows, hit_object.Tail.HitWindows).DifficultyMultiplier = (
+                    HIT_WINDOW_DIFFICULTY_MULTIPLIER
+                )
         elif isinstance(hit_object, Note):
-            hit_object.HitWindows.DifficultyMultiplier = (
+            cast(ManiaHitWindows, hit_object.HitWindows).DifficultyMultiplier = (
                 HIT_WINDOW_DIFFICULTY_MULTIPLIER
             )

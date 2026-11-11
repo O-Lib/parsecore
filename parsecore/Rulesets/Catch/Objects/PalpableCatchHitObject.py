@@ -30,18 +30,14 @@ from parsecore.Rulesets.Catch.Objects.CatchHitObject import CatchHitObject
 class PalpableCatchHitObject(CatchHitObject):
     """Something the plate can catch."""
 
-    def __init__(self, start_time: float = 0.0, x: float = 0.0) -> None:
-        """Create a catchable object.
+    def __init__(self) -> None:
+        """Create a catchable object."""
 
-        Args:
-            start_time: The object's time in milliseconds.
-            x: Where the beatmap places it across the playfield.
-        """
-        super().__init__(start_time, x)
+        super().__init__()
         # How much further the object could sit before the player would have
         # to hyper-dash to reach the next one.
         self.DistanceToHyperDash: float = 0.0
-        self._hyper_dash_target = None
+        self._hyper_dash_target: CatchHitObject | None = None
 
     @property
     def HyperDash(self) -> bool:
@@ -49,12 +45,12 @@ class PalpableCatchHitObject(CatchHitObject):
         return self._hyper_dash_target is not None
 
     @property
-    def HyperDashTarget(self):
+    def HyperDashTarget(self) -> CatchHitObject | None:
         """Return the object a hyper-dash from here leads to."""
         return self._hyper_dash_target
 
     @HyperDashTarget.setter
-    def HyperDashTarget(self, value) -> None:
+    def HyperDashTarget(self, value: CatchHitObject | None) -> None:
         """Set the object a hyper-dash from here leads to.
 
         Args:

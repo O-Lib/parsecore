@@ -25,11 +25,15 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Rulesets.Mods.ModTouchDevice import ModTouchDevice
+from parsecore.Rulesets.Osu.Mods.OsuModAutopilot import OsuModAutopilot
 
 
 class OsuModTouchDevice(ModTouchDevice):
     """Automatically applied to plays on devices with a touchscreen."""
 
-    Name = "Touch Device"
-    Acronym = "TD"
-    Description = "Automatically applied to plays on devices with a touchscreen."
+    Ranked = True
+
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Touch Device."""
+        return [*super().IncompatibleMods, type(OsuModAutopilot)]

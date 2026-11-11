@@ -29,6 +29,7 @@ from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
 )
 from parsecore.Rulesets.Difficulty.Skills.StrainDecaySkill import StrainDecaySkill
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Taiko.Difficulty.Evaluators import (
     RhythmEvaluator,
     StaminaEvaluator,
@@ -40,6 +41,14 @@ class Rhythm(StrainDecaySkill):
 
     SkillMultiplier = 1.0
     StrainDecayBase = 0.4
+
+    def __init__(self, mods: list[Mod]) -> None:
+        """Create the rhythm skill.
+
+        Args:
+            mods: The mods the score was set with.
+        """
+        super().__init__(mods)
 
     def StrainValueOf(self, current: DifficultyHitObject) -> float:
         """Return how much rhythm strain an object adds.

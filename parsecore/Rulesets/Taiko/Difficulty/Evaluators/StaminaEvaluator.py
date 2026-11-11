@@ -24,6 +24,14 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+    TaikoDifficultyHitObject,
+)
 from parsecore.Rulesets.Taiko.Objects.Hit import Hit
 
 # How long a colour change may be away before it stops constraining the hands.
@@ -37,7 +45,7 @@ FREE_FINGERS = 8
 BASE_STRAIN = 0.5
 
 
-def EvaluateDifficultyOf(current) -> float:
+def EvaluateDifficultyOf(current: DifficultyHitObject) -> float:
     """Return how much stamina a note demands.
 
     Args:
@@ -46,6 +54,7 @@ def EvaluateDifficultyOf(current) -> float:
     if not isinstance(current.BaseObject, Hit):
         return 0.0
 
+    current = cast(TaikoDifficultyHitObject, current)
     previous = current.Previous(1)
     previous_mono = current.PreviousMono(_available_fingers_for(current) - 1)
 
@@ -70,7 +79,7 @@ def _speed_bonus(interval: float) -> float:
     return 20 / max(interval, 1)
 
 
-def _available_fingers_for(hit_object) -> int:
+def _available_fingers_for(hit_object: TaikoDifficultyHitObject) -> int:
     """Return how many fingers the passage around a note leaves free.
 
     Args:

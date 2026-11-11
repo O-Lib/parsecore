@@ -21,6 +21,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+from typing import cast
 
 import pytest
 
@@ -29,6 +30,7 @@ from parsecore.Beatmaps.Formats.LegacyBeatmapEncoder import (
     FIRST_LAZER_VERSION,
     LegacyBeatmapEncoder,
 )
+from parsecore.Beatmaps.Legacy.LegacyControlPointInfo import LegacyControlPointInfo
 
 GOLDEN_SECTIONS = [
     (
@@ -143,8 +145,9 @@ def test_a_red_and_an_inherited_line_on_one_millisecond_collapse(beatmap_files):
         f for f in beatmap_files if f.name.startswith("Shuhei Kita - Soul Phrase")
     )
     decoded = LegacyBeatmapDecoder.FromPath(str(path))
+    legacy_cp = cast(LegacyControlPointInfo, decoded.ControlPointInfo)
 
-    at_1317 = [p for p in decoded.ControlPointInfo.SamplePoints if p.Time == 1317]
+    at_1317 = [p for p in legacy_cp.SamplePoints if p.Time == 1317]
 
     assert len(at_1317) == 1
     assert at_1317[0].SampleBank == "normal"

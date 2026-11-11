@@ -35,4 +35,14 @@ class ModRelax(Mod):
     Acronym = "RX"
     Description = "You don't need to click. Give your clicking/tapping fingers a break."
     Type = ModType.Automation
-    ScoreMultiplier = 1.0
+    ScoreMultiplier = 0.1
+
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Relax.
+
+        Returns:
+            A list containing the Autoplay mod class.
+        """
+        from parsecore.Rulesets.Mods.ModAutoplay import ModAutoplay
+        return [type(ModAutoplay)]

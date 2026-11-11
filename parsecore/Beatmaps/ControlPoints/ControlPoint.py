@@ -26,15 +26,29 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from parsecore.Beatmaps.ControlPoints.IControlPoint import IControlPoint
+
+if TYPE_CHECKING:
+    from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointGroup
 
 
 @dataclass(slots=True)
-class ControlPoint:
+class ControlPoint(IControlPoint):
     """A change that takes effect from :attr:`Time` onward."""
 
     Time: float = 0.0
 
-    def IsRedundant(self, existing: ControlPoint) -> bool:
+    def AttachGroup(self, point_group: ControlPointGroup) -> None:
+        """Attach this control point to a group and sync its time.
+
+        Args:
+            point_group: The control point group to attach to.
+        """
+        self.Time = point_group.Time
+
+    def IsRedundant(self, existing: ControlPoint | None) -> bool:
         """Return whether this point changes nothing over ``existing``.
 
         Args:
@@ -52,3 +66,20 @@ class ControlPoint:
     def __lt__(self, other: ControlPoint) -> bool:
         """Order control points by time."""
         return self.Time < other.Time
+
+    def __gt__(self, other: ControlPoint) -> bool:
+        """Order control points by time."""
+        return self.Time > other.Time
+
+    def __eq__(self, value: object) -> bool:
+        """Check equality with another control point based on time.
+
+        Args:
+            value: The object to compare with.
+
+        Returns:
+            ``True`` if both control points occur at the same time.
+        """
+        if not isinstance(value, ControlPoint):
+            raise NotImplementedError
+        return self.Time == value.Time

@@ -26,6 +26,9 @@ from __future__ import annotations
 
 import math
 
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+    TaikoDifficultyHitObject,
+)
 from parsecore.Rulesets.Taiko.Difficulty.Utils import DeltaTimeNormaliser
 from parsecore.Rulesets.Taiko.Difficulty.Utils.IntervalGroupingUtils import (
     MARGIN_OF_ERROR,
@@ -38,7 +41,9 @@ SNAP_TOLERANCE = MARGIN_OF_ERROR
 class SameRhythmHitObjectGrouping:
     """Notes that follow each other at one spacing."""
 
-    def __init__(self, previous, hit_objects: list) -> None:
+    def __init__(
+            self, previous: SameRhythmHitObjectGrouping | None, hit_objects: list[TaikoDifficultyHitObject]
+    ) -> None:
         """Group a run of evenly spaced notes.
 
         The group's spacing is carried over from the previous group when the
@@ -83,7 +88,7 @@ class SameRhythmHitObjectGrouping:
                 self.Interval = self.StartTime - previous.StartTime
 
     @property
-    def FirstHitObject(self):
+    def FirstHitObject(self) -> TaikoDifficultyHitObject:
         """Return the note the group opens on."""
         return self.HitObjects[0]
 

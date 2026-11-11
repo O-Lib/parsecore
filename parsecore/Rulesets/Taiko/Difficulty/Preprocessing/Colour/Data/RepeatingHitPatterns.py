@@ -24,6 +24,16 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Colour.Data.AlternatingMonoPattern import (
+        AlternatingMonoPattern,
+    )
+    from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+        TaikoDifficultyHitObject,
+    )
+
 # Beyond this many patterns back, a repeat is no longer worth remembering.
 MAX_REPETITION_INTERVAL = 16
 
@@ -37,12 +47,12 @@ class RepeatingHitPatterns:
         Args:
             previous: The group before this one, if any.
         """
-        self.AlternatingMonoPatterns: list = []
+        self.AlternatingMonoPatterns: list[AlternatingMonoPattern] = []
         self.Previous = previous
         self.RepetitionInterval: int = MAX_REPETITION_INTERVAL + 1
 
     @property
-    def FirstHitObject(self):
+    def FirstHitObject(self) -> TaikoDifficultyHitObject:
         """Return the note the group opens on."""
         return self.AlternatingMonoPatterns[0].FirstHitObject
 
@@ -79,7 +89,7 @@ class RepeatingHitPatterns:
         other = self.Previous
         interval = 1
 
-        while interval < MAX_REPETITION_INTERVAL:
+        while interval < MAX_REPETITION_INTERVAL and other is not None:
             if self._is_repetition_of(other):
                 self.RepetitionInterval = min(interval, MAX_REPETITION_INTERVAL)
                 return

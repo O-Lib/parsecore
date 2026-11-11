@@ -31,4 +31,4 @@ from typing import Protocol, runtime_checkable
 class IHasDistance(Protocol):
     """An object that spans a distance."""
 
-    distance: float
+    Distance: float

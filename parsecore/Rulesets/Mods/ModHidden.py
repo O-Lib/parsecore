@@ -24,11 +24,13 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Mods.ModType import ModType
+from parsecore.Rulesets.Mods.ModWithVisibilityAdjustment import (
+    ModWithVisibilityAdjustment,
+)
 
 
-class ModHidden(Mod):
+class ModHidden(ModWithVisibilityAdjustment):
     """Play with no approach circles and fading objects."""
 
     Name = "Hidden"
@@ -36,3 +38,4 @@ class ModHidden(Mod):
     Description = "Play with no approach circles and fading objects."
     Type = ModType.DifficultyIncrease
     ScoreMultiplier = 1.06
+    Ranked = True

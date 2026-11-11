@@ -24,23 +24,20 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
 from parsecore.Rulesets.Scoring.EmptyHitWindows import EmptyHitWindows
 from parsecore.Rulesets.Taiko.Objects.SwellTick import SwellTick
 from parsecore.Rulesets.Taiko.Objects.TaikoHitObject import TaikoHitObject
 
 
-class Swell(TaikoHitObject):
+class Swell(TaikoHitObject, IHasDuration):
     """A shaker, completed by alternating hits rather than timing."""
 
-    def __init__(self, start_time: float = 0.0, duration: float = 0.0) -> None:
-        """Create a swell.
+    def __init__(self) -> None:
+        """Create a swell."""
 
-        Args:
-            start_time: The swell's start in milliseconds.
-            duration: How long the swell lasts.
-        """
-        super().__init__(start_time)
-        self.Duration: float = duration
+        super().__init__()
+        self.Duration: float = 0.0
         self.RequiredHits: int = 10
 
     @property
@@ -48,17 +45,26 @@ class Swell(TaikoHitObject):
         """Return when the swell ends."""
         return self.StartTime + self.Duration
 
+    @EndTime.setter
+    def EndTime(self, value: float) -> None:
+        self.Duration = value - self.StartTime
+
     def CreateNestedHitObjects(self) -> None:
         """Add one tick for every hit the swell asks for."""
         super().CreateNestedHitObjects()
 
         for _ in range(self.RequiredHits):
-            tick = SwellTick(self.StartTime)
-            tick.Samples = list(self.Samples)
+            tick = SwellTick()
+            tick.StartTime = self.StartTime
+            tick.Samples = self.Samples
             self.AddNested(tick)
 
     def CreateJudgement(self):
-        """Return the judgement this object is scored with."""
+        """Return the judgement this object is scored with.
+
+        Returns:
+            The taiko swell judgement instance.
+        """
         from parsecore.Rulesets.Taiko.Judgements.TaikoJudgement import (
             TaikoSwellJudgement,
         )
@@ -66,5 +72,9 @@ class Swell(TaikoHitObject):
         return TaikoSwellJudgement()
 
     def CreateHitWindows(self):
-        """Return no windows; a swell is not judged on timing."""
+        """Return no windows; a swell is not judged on timing.
+
+        Returns:
+            An empty hit windows instance.
+        """
         return EmptyHitWindows()

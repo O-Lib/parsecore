@@ -27,18 +27,19 @@ from __future__ import annotations
 from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
     DifficultyHitObject,
 )
+from parsecore.Rulesets.Mods.Mod import Mod
 
 
 class Skill:
     """Measures one aspect of how hard a beatmap is."""
 
-    def __init__(self, mods: list | None = None) -> None:
+    def __init__(self, mods: list[Mod]) -> None:
         """Create a skill.
 
         Args:
             mods: The mods the score was set with.
         """
-        self.Mods = list(mods or [])
+        self.Mods = mods
         self.ObjectDifficulties: list[float] = []
 
     def Process(self, current: DifficultyHitObject) -> None:

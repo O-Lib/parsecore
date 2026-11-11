@@ -27,6 +27,7 @@ from parsecore.Beatmaps.WorkingBeatmap import WorkingBeatmap
 from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapConverter import OsuBeatmapConverter
 from parsecore.Rulesets.Osu.Beatmaps.OsuBeatmapProcessor import OsuBeatmapProcessor
 from parsecore.Rulesets.Osu.Objects.HitCircle import HitCircle
+from parsecore.Rulesets.Osu.Objects.OsuHitObject import OsuHitObject
 from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
 from parsecore.Utils.Vector2 import Vector2
 
@@ -46,9 +47,7 @@ MANIA_MAP = (
 def _convert(text: str):
     """Decode a beatmap and run it through the osu! conversion pipeline."""
     decoded = LegacyBeatmapDecoder.FromText(text)
-    return WorkingBeatmap(decoded).GetPlayableBeatmap(
-        OsuBeatmapConverter, OsuBeatmapProcessor
-    )
+    return WorkingBeatmap(decoded)
 
 
 def test_a_hold_note_becomes_a_spinner():
@@ -57,7 +56,9 @@ def test_a_hold_note_becomes_a_spinner():
     osu! decides this on the object having a duration rather than on which
     ruleset wrote it, so a hold note takes the same branch a spinner does.
     """
-    beatmap = _convert(MANIA_MAP)
+    beatmap = _convert(MANIA_MAP).GetPlayableBeatmap(
+        OsuBeatmapConverter, OsuBeatmapProcessor
+    )
 
     assert isinstance(beatmap.HitObjects[0], HitCircle)
     assert isinstance(beatmap.HitObjects[1], Spinner)
@@ -85,7 +86,9 @@ def test_a_spinner_is_never_moved_by_stacking():
         + "".join(f"256,192,{1000 + i * 50},1,0\n" for i in range(8))
         + "256,192,1400,12,0,2000\n"
     )
-    beatmap = _convert(stacked)
+    beatmap = _convert(stacked).GetPlayableBeatmap(
+        OsuBeatmapConverter, OsuBeatmapProcessor
+    )
 
     spinner = next(o for o in beatmap.HitObjects if isinstance(o, Spinner))
     assert spinner.StackOffset == Vector2()
@@ -113,9 +116,11 @@ def test_pre_v6_stacking_advances_by_start_time():
         "100,100,1200,1,0\n"
         "100,100,1400,1,0\n"
     )
-    beatmap = _convert(text)
+    beatmap = _convert(text).GetPlayableBeatmap(
+        OsuBeatmapConverter, OsuBeatmapProcessor
+    )
 
-    heights = [o.StackHeight for o in beatmap.HitObjects]
+    heights = [o.StackHeight for o in beatmap.HitObjects if isinstance(o, OsuHitObject)]
     assert heights == [2, 1, 0]
 
 

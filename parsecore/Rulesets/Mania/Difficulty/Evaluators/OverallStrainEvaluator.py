@@ -24,7 +24,15 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Mania.Difficulty.Preprocessing.ManiaDifficultyHitObject import (
+    ManiaDifficultyHitObject,
+)
 from parsecore.Utils.Precision import DefinitelyBigger
 
 # How far apart two releases must be before the later one is awkward.
@@ -34,12 +42,13 @@ RELEASE_THRESHOLD = 30.0
 HOLD_FACTOR = 1.25
 
 
-def EvaluateDifficultyOf(current) -> float:
+def EvaluateDifficultyOf(current: DifficultyHitObject) -> float:
     """Return how hard the stage is at the moment of one note.
 
     Args:
         current: The difficulty object to rate.
     """
+    current = cast(ManiaDifficultyHitObject, current)
     start_time = current.StartTime
     end_time = current.EndTime
     is_overlapping = False
@@ -67,13 +76,13 @@ def EvaluateDifficultyOf(current) -> float:
         ):
             hold_factor = HOLD_FACTOR
 
-        closest_end_time = min(closest_end_time, abs(end_time - previous.EndTime))
+        closest_end_time = float(min(closest_end_time, abs(end_time - previous.EndTime)))
 
     # The bonus for an awkward release only stands where nothing else ends near
     # by; it is halved once the closest release is a release threshold away.
     if is_overlapping:
         hold_addition = DiffUtils.Logistic(
-            closest_end_time, multiplier=0.27, midpoint_offset=RELEASE_THRESHOLD
+            closest_end_time, RELEASE_THRESHOLD, 0.27
         )
 
     return (1 + hold_addition) * hold_factor

@@ -26,24 +26,41 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.BeatmapInfo import BeatmapInfo as BInfo
+from parsecore.Beatmaps.BeatmapMetadata import BeatmapMetadata
+from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
+from parsecore.Beatmaps.Timing.BreakPeriod import BreakPeriod
+from parsecore.Rulesets.Objects.HitObject import HitObject
+
 
 @runtime_checkable
 class IBeatmap(Protocol):
-    """A parsed beatmap: its settings, control points and hit objects."""
+    """A parsed beatmap: its attributes, control points and hit objects."""
 
-    BeatmapInfo: object
-    ControlPointInfo: object
-    Breaks: list
-    HitObjects: list
+    ControlPointInfo: ControlPointInfo
+    Breaks: list[BreakPeriod]
+    HitObjects: list[HitObject]
+    UnhandledEventLines: list[str]
 
     @property
-    def Metadata(self) -> object:
-        """Return the beatmap's metadata."""
+    def BeatmapInfo(self) -> BInfo:
+        """The beatmap's general information."""
         ...
 
     @property
-    def Difficulty(self) -> object:
-        """Return the beatmap's difficulty settings."""
+    def Metadata(self) -> BeatmapMetadata:
+        """The beatmap's metadata."""
+        ...
+
+    @property
+    def Difficulty(self) -> BeatmapDifficulty:
+        """The beatmap's difficulty attributes."""
+        ...
+
+    @property
+    def TotalBreakTime(self) -> float:
+        """Total amount of break time in the beatmap."""
         ...
 
     def GetMostCommonBeatLength(self) -> float:

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from parsecore.Rulesets.Mods.ModRateAdjust import ModRateAdjust
 from parsecore.Rulesets.Mods.ModType import ModType
+from parsecore.Utils.Precision import Clamp
 
 
 class ModDaycore(ModRateAdjust):
@@ -35,5 +36,14 @@ class ModDaycore(ModRateAdjust):
     Acronym = "DC"
     Description = "Whoaaaaa..."
     Type = ModType.DifficultyReduction
-    SpeedChange = 0.75
+    SpeedChange = Clamp(0.75, 0.5, 0.99)
     Ranked = True
+
+    @property
+    def ScoreMultiplier(self) -> float:
+        """Return the score multiplier calculated for the current speed rate adjustment.
+
+        Returns:
+            The rate-adjusted score multiplier.
+        """
+        return self._rateAdjustMultiplier()

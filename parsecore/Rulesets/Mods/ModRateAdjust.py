@@ -24,10 +24,11 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Rulesets.Mods.IApplicableToRate import IApplicableToRate
 from parsecore.Rulesets.Mods.Mod import Mod
 
 
-class ModRateAdjust(Mod):
+class ModRateAdjust(Mod, IApplicableToRate):
     """A mod that multiplies the beatmap's playback rate."""
 
     SpeedChange: float = 1.0
@@ -38,5 +39,22 @@ class ModRateAdjust(Mod):
         Args:
             time: The time in the beatmap.
             rate: The rate before this mod is applied.
+
+        Returns:
+            The adjusted playback rate.
         """
         return rate * self.SpeedChange
+
+    def _rateAdjustMultiplier(self) -> float:
+        """Calculate the score multiplier based on the current speed change.
+
+        Returns:
+            The calculated score multiplier for rate adjustments.
+        """
+        value = int(self.SpeedChange * 10) / 10.0
+        value -= 1
+
+        if self.SpeedChange >= 1:
+            return 1 + value / 5
+        else:
+            return 0.6 + value

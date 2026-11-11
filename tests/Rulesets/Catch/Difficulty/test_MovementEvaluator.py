@@ -21,7 +21,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
-
+from parsecore.Rulesets.Catch.Beatmaps.CatchBeatmapConverter import (
+    CatchBeatmapConverter,
+)
+from parsecore.Rulesets.Catch.Beatmaps.CatchBeatmapProcessor import (
+    CatchBeatmapProcessor,
+)
 from parsecore.Rulesets.Catch.Difficulty.CatchDifficultyCalculator import (
     CatchDifficultyCalculator,
 )
@@ -37,7 +42,10 @@ def _objects(objects: str, cs: float = 4.0) -> list:
         cs: The circle size, which decides how wide the plate is.
     """
     beatmap = convert(objects, cs)
-    return CatchDifficultyCalculator(beatmap).CreateDifficultyHitObjects(beatmap, 1.0)
+    playable_beatmap = beatmap.GetPlayableBeatmap(
+        CatchBeatmapConverter, CatchBeatmapProcessor, []
+    )
+    return CatchDifficultyCalculator(beatmap).CreateDifficultyHitObjects(playable_beatmap, [])
 
 
 def _difficulties(objects: str, cs: float = 4.0) -> list[float]:

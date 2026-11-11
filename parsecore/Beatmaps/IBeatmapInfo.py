@@ -26,14 +26,17 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from parsecore.Beatmaps.IBeatmapDifficultyInfo import IBeatmapDifficultyInfo
+from parsecore.Beatmaps.IBeatmapMetadataInfo import IBeatmapMetadataInfo
+
 
 @runtime_checkable
 class IBeatmapInfo(Protocol):
     """One difficulty: its name, ruleset, metadata and difficulty settings."""
 
     DifficultyName: str
-    Metadata: object
-    Difficulty: object
+    Metadata: IBeatmapMetadataInfo
+    Difficulty: IBeatmapDifficultyInfo
     RulesetID: int
     StarRating: float
     Length: float

@@ -29,7 +29,3 @@ from parsecore.Rulesets.Mods.ModNoFail import ModNoFail
 
 class OsuModNoFail(ModNoFail):
     """You can't fail, no matter what."""
-
-    Name = "No Fail"
-    Acronym = "NF"
-    Description = "You can't fail, no matter what."

@@ -26,7 +26,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.BeatmapInfo import BeatmapInfo
+from parsecore.Rulesets.Mods.Mod import Mod
 from parsecore.Rulesets.Scoring.HitResult import HitResult
 
 
@@ -36,13 +37,12 @@ class ScoreInfo:
 
     Accuracy: float = 1.0
     MaxCombo: int = 0
-    RulesetID: int = 0
     TotalScore: int = 0
     # The total an osu!stable score recorded. A score set on osu!lazer has
     # none, and its absence is what tells the two apart.
     LegacyTotalScore: int | None = None
-    Mods: list = field(default_factory=list)
-    BeatmapDifficulty: BeatmapDifficulty = field(default_factory=BeatmapDifficulty)
+    Mods: list[Mod] = field(default_factory=list)
+    BeatmapInfo: BeatmapInfo = field(default_factory=BeatmapInfo)
     Statistics: dict[HitResult, int] = field(default_factory=dict)
     MaximumStatistics: dict[HitResult, int] = field(default_factory=dict)
 

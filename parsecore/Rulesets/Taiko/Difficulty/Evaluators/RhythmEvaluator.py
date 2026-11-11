@@ -25,8 +25,18 @@ SOFTWARE.
 from __future__ import annotations
 
 import math
+from typing import cast
 
+from parsecore.Rulesets.Difficulty.Preprocessing.DifficultyHitObject import (
+    DifficultyHitObject,
+)
 from parsecore.Rulesets.Difficulty.Utils import DiffUtils
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.Rhythm.Data.SameRhythmHitObjectGrouping import (
+    SameRhythmHitObjectGrouping,
+)
+from parsecore.Rulesets.Taiko.Difficulty.Preprocessing.TaikoDifficultyHitObject import (
+    TaikoDifficultyHitObject,
+)
 from parsecore.Rulesets.Taiko.Objects.Hit import Hit
 
 # How close two spacings must be before a repeat is penalised.
@@ -39,7 +49,7 @@ REPEATED_INTERVAL_PENALTY = 0.80
 SHORT_INTERVAL_NOTE_LIMIT = 6
 
 
-def EvaluateDifficultyOf(hit_object) -> float:
+def EvaluateDifficultyOf(hit_object: DifficultyHitObject) -> float:
     """Return how hard a note's rhythm is.
 
     Args:
@@ -48,7 +58,8 @@ def EvaluateDifficultyOf(hit_object) -> float:
     if not isinstance(hit_object.BaseObject, Hit):
         return 0.0
 
-    rhythm_data = hit_object.RhythmData
+
+    rhythm_data = cast(TaikoDifficultyHitObject, hit_object).RhythmData
     hit_window = hit_object.HitWindowGreat
 
     same_rhythm = 0.0
@@ -69,7 +80,7 @@ def EvaluateDifficultyOf(hit_object) -> float:
     return max(same_rhythm, same_pattern) * interval_penalty * gap_penalty
 
 
-def _evaluate_rhythm_group(rhythm_group, hit_window: float) -> float:
+def _evaluate_rhythm_group(rhythm_group: SameRhythmHitObjectGrouping, hit_window: float) -> float:
     """Return how hard one steady run of notes is.
 
     Args:
@@ -108,7 +119,9 @@ def _evaluate_rhythm_group(rhythm_group, hit_window: float) -> float:
 
 
 def _repeated_interval_penalty(
-    rhythm_group, hit_window: float, threshold: float = REPEATED_INTERVAL_THRESHOLD
+        rhythm_group: SameRhythmHitObjectGrouping,
+        hit_window: float,
+        threshold: float = REPEATED_INTERVAL_THRESHOLD
 ) -> float:
     """Return how much a spacing the player has already met is discounted.
 
@@ -130,7 +143,7 @@ def _repeated_interval_penalty(
     return min(long_interval_penalty, short_interval_penalty) * duration_penalty
 
 
-def _same_interval(start_group, interval_count: int, threshold: float) -> float:
+def _same_interval(start_group: SameRhythmHitObjectGrouping, interval_count: int, threshold: float) -> float:
     """Return whether any two of the last few spacings match.
 
     Args:
@@ -162,7 +175,7 @@ def _same_interval(start_group, interval_count: int, threshold: float) -> float:
     return 1.0
 
 
-def _long_gap_penalty(previous) -> float:
+def _long_gap_penalty(previous: SameRhythmHitObjectGrouping | None) -> float:
     """Return how much a pause before a short run eases it.
 
     Args:

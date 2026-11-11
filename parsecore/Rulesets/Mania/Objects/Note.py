@@ -29,3 +29,8 @@ from parsecore.Rulesets.Mania.Objects.ManiaHitObject import ManiaHitObject
 
 class Note(ManiaHitObject):
     """A note that is hit with one press."""
+
+    def CreateJudgement(self):
+        """Return the judgement this object is scored with."""
+        from parsecore.Rulesets.Mania.Judgements.ManiaJudgement import ManiaJudgement
+        return ManiaJudgement()

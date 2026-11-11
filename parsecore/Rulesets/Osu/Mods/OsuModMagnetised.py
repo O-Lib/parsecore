@@ -24,20 +24,25 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from parsecore.Rulesets.Mods.ModMagnetised import ModMagnetised
+from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Mods.ModAutoplay import ModAutoplay
+from parsecore.Rulesets.Mods.ModType import ModType
+from parsecore.Rulesets.Osu.Mods.OsuModRelax import OsuModRelax
+from parsecore.Utils.Precision import Clamp
 
 
-class OsuModMagnetised(ModMagnetised):
+class OsuModMagnetised(Mod):
     """No need to chase the circles - your cursor is a magnet!"""
 
     Name = "Magnetised"
     Acronym = "MG"
     Description = "No need to chase the circles - your cursor is a magnet!"
+    Type = ModType.Fun
+    ScoreMultiplier = 0.5
+    AttractionStrength: float = Clamp(0.5, 0.05, 1.0)
 
-    def __init__(self, attraction_strength: float = 0.5) -> None:
-        """Create the mod.
-
-        Args:
-            attraction_strength: How strongly the cursor is pulled to objects.
-        """
-        self.AttractionStrength = attraction_strength
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Magnetised."""
+        from parsecore.Rulesets.Osu.Mods.OsuModAutopilot import OsuModAutopilot
+        return [type(OsuModAutopilot), type(ModAutoplay), type(OsuModRelax)]

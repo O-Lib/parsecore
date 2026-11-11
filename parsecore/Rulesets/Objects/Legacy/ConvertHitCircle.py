@@ -25,28 +25,7 @@ SOFTWARE.
 from __future__ import annotations
 
 from parsecore.Rulesets.Objects.Legacy.ConvertHitObject import ConvertHitObject
-from parsecore.Utils.Vector2 import Vector2
 
 
 class ConvertHitCircle(ConvertHitObject):
     """A single tap at a position."""
-
-    def __init__(self, start_time: float = 0.0, position: Vector2 | None = None) -> None:
-        """Create a hit circle.
-
-        Args:
-            start_time: The object's time in milliseconds.
-            position: The circle's position on the playfield.
-        """
-        super().__init__(start_time)
-        self.Position: Vector2 = position or Vector2()
-
-    @property
-    def X(self) -> float:
-        """Return the circle's x position."""
-        return self.Position.X
-
-    @property
-    def Y(self) -> float:
-        """Return the circle's y position."""
-        return self.Position.Y

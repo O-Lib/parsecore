@@ -24,14 +24,21 @@ SOFTWARE.
 
 from __future__ import annotations
 
-from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Mods.ModBlinds import ModBlinds
 from parsecore.Rulesets.Mods.ModType import ModType
 
 
-class OsuModBlinds(Mod):
+class OsuModBlinds(ModBlinds):
     """Play with blinds on your screen."""
 
     Name = "Blinds"
     Acronym = "BL"
     Description = "Play with blinds on your screen."
-    Type = ModType.Fun
+    Type = ModType.DifficultyIncrease
+    Ranked = True
+
+    @property
+    def IncompatibleMods(self) -> list[type]:
+        """Return the list of mod types incompatible with Blinds."""
+        from parsecore.Rulesets.Osu.Mods.OsuModFlashlight import OsuModFlashlight
+        return [type(OsuModFlashlight)]

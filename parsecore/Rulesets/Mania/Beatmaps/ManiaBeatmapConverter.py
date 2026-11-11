@@ -24,6 +24,9 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import cast
+
+from parsecore.Beatmaps.Beatmap import Beatmap
 from parsecore.Beatmaps.BeatmapConverter import BeatmapConverter
 from parsecore.Beatmaps.Legacy.LegacyHitObjectType import LegacyHitObjectType
 from parsecore.Rulesets.Mania.Beatmaps.ManiaBeatmap import ManiaBeatmap
@@ -46,7 +49,15 @@ from parsecore.Rulesets.Mania.Objects.ManiaHitObject import ManiaHitObject
 from parsecore.Rulesets.Mods.IApplicableToBeatmapConverter import (
     IApplicableToBeatmapConverter,
 )
+from parsecore.Rulesets.Mods.Mod import Mod
+from parsecore.Rulesets.Objects.HitObject import HitObject
+from parsecore.Rulesets.Objects.Legacy.IHasLegacyHitObjectType import (
+    IHasLegacyHitObjectType,
+)
 from parsecore.Rulesets.Objects.Types.IHasDuration import IHasDuration
+from parsecore.Rulesets.Objects.Types.IHasPath import IHasPath
+from parsecore.Rulesets.Objects.Types.IHasPosition import IHasPosition
+from parsecore.Rulesets.Objects.Types.IHasXPosition import IHasXPosition
 from parsecore.Rulesets.Scoring.Legacy.LegacyBeatmapConversionDifficultyInfo import (
     LegacyBeatmapConversionDifficultyInfo,
 )
@@ -69,7 +80,9 @@ PLAYFIELD_CENTRE = Vector2(256, 192)
 class ManiaBeatmapConverter(BeatmapConverter):
     """Turns a beatmap into the notes and holds mania plays."""
 
-    def __init__(self, beatmap, difficulty=None) -> None:
+    def __init__(
+            self, beatmap: Beatmap | None, difficulty: LegacyBeatmapConversionDifficultyInfo | None = None
+    ) -> None:
         """Create a converter for a beatmap.
 
         Args:
@@ -77,6 +90,7 @@ class ManiaBeatmapConverter(BeatmapConverter):
             difficulty: The settings to convert against, read from the beatmap
                 when not given.
         """
+        beatmap = cast(Beatmap, beatmap)
         super().__init__(beatmap)
 
         if difficulty is None:
@@ -115,7 +129,7 @@ class ManiaBeatmapConverter(BeatmapConverter):
 
     def CanConvert(self) -> bool:
         """Return whether mania can play the beatmap."""
-        return all(hasattr(h, "X") for h in self.Beatmap.HitObjects)
+        return all(isinstance(h, IHasXPosition) for h in self.Beatmap.HitObjects)
 
     def CreateBeatmap(self) -> ManiaBeatmap:
         """Return an empty mania beatmap with the right number of stages."""
@@ -126,7 +140,7 @@ class ManiaBeatmapConverter(BeatmapConverter):
 
         return beatmap
 
-    def ConvertHitObject(self, original, beatmap) -> list:
+    def ConvertHitObject(self, original: HitObject, beatmap: Beatmap) -> list[HitObject]:
         """Convert one object into the mania objects it becomes.
 
         Args:
@@ -146,7 +160,7 @@ class ManiaBeatmapConverter(BeatmapConverter):
 
         start_time = original.StartTime
         end_time = original.EndTime if isinstance(original, IHasDuration) else start_time
-        position = getattr(original, "Position", None) or Vector2()
+        position = original.Position if isinstance(original, IHasPosition) else Vector2()
 
         if legacy_type == LegacyHitObjectType.Circle:
             if self.IsForCurrentRuleset:
@@ -246,7 +260,7 @@ class ManiaBeatmapConverter(BeatmapConverter):
         self._last_position = position
 
 
-def GetColumnCount(difficulty, mods: list | None = None) -> int:
+def GetColumnCount(difficulty: LegacyBeatmapConversionDifficultyInfo, mods: list[Mod] | None = None) -> int:
     """Return how many columns a beatmap would be converted onto.
 
     This answers the question without converting anything, which is what the
@@ -258,24 +272,24 @@ def GetColumnCount(difficulty, mods: list | None = None) -> int:
     """
     converter = ManiaBeatmapConverter(None, difficulty)
 
-    for mod in mods or []:
-        if isinstance(mod, IApplicableToBeatmapConverter):
-            mod.ApplyToBeatmapConverter(converter)
+    if mods is not None:
+        for mod in mods:
+            if isinstance(mod, IApplicableToBeatmapConverter):
+                mod.ApplyToBeatmapConverter(converter)
 
     return converter.TotalColumns
 
 
-def _legacy_type_of(original) -> LegacyHitObjectType:
+def _legacy_type_of(original: HitObject) -> LegacyHitObjectType:
     """Return which osu!stable object type an object stands in for.
 
     Args:
         original: The decoded object.
     """
-    legacy_type = getattr(original, "LegacyType", None)
-    if legacy_type is not None:
-        return legacy_type & LegacyHitObjectType.ObjectTypes
+    if isinstance(original, IHasLegacyHitObjectType):
+        return original.LegacyType & LegacyHitObjectType.ObjectTypes
 
-    if hasattr(original, "Path"):
+    if isinstance(original, IHasPath):
         return LegacyHitObjectType.Slider
 
     if isinstance(original, IHasDuration):
@@ -284,7 +298,7 @@ def _legacy_type_of(original) -> LegacyHitObjectType:
     return LegacyHitObjectType.Circle
 
 
-def _get_column_count(difficulty) -> int:
+def _get_column_count(difficulty: LegacyBeatmapConversionDifficultyInfo) -> int:
     """Return how many columns a beatmap is converted onto.
 
     A beatmap written for mania says so itself through its circle size.

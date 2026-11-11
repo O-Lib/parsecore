@@ -69,7 +69,10 @@ class LegacyDecoder:
             if self.ShouldSkipLine(line):
                 continue
 
-            stripped = line.strip()
+            if section != Section.Metadata:
+                line = self.StripComments(line)
+
+            stripped = line.rstrip()
             if stripped.startswith("[") and stripped.endswith("]"):
                 name = stripped[1:-1]
                 try:

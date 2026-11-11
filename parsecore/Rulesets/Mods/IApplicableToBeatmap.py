@@ -26,12 +26,14 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+
 
 @runtime_checkable
 class IApplicableToBeatmap(Protocol):
     """A mod that rewrites the beatmap before it is played."""
 
-    def ApplyToBeatmap(self, beatmap) -> None:
+    def ApplyToBeatmap(self, beatmap: Beatmap) -> None:
         """Modify the beatmap in place.
 
         Args:

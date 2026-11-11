@@ -24,12 +24,21 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.ControlPoints.ControlPointInfo import ControlPointInfo
 from parsecore.Rulesets.Objects.HitObject import HitObject
 from parsecore.Rulesets.Objects.Legacy.LegacyRulesetExtensions import (
     CalculateScaleFromCircleSize,
 )
+from parsecore.Rulesets.Objects.Types.IHasComboInformation import IHasComboInformation
+from parsecore.Rulesets.Objects.Types.IHasPosition import IHasPosition
+from parsecore.Rulesets.Objects.Types.IHasTimePreempt import IHasTimePreempt
 from parsecore.Utils.Vector2 import Vector2, f32
+
+if TYPE_CHECKING:
+    from parsecore.Rulesets.Osu.Objects.Spinner import Spinner
 
 # The radius of a circle at scale 1.
 OBJECT_RADIUS = 64.0
@@ -45,18 +54,14 @@ PREEMPT_MAX = 1800.0
 STACK_OFFSET_MULTIPLIER = -6.4
 
 
-class OsuHitObject(HitObject):
+class OsuHitObject(HitObject, IHasComboInformation, IHasPosition, IHasTimePreempt):
     """Something the player clicks, at a position on the playfield."""
 
-    def __init__(self, start_time: float = 0.0, position: Vector2 | None = None) -> None:
-        """Create an osu! object.
+    def __init__(self) -> None:
+        """Create an osu! object."""
 
-        Args:
-            start_time: The object's time in milliseconds.
-            position: The object's position on the playfield.
-        """
-        super().__init__(start_time)
-        self.Position: Vector2 = position or Vector2()
+        super().__init__()
+        self.position: Vector2 = Vector2()
 
         self.TimePreempt: float = 600.0
         self.TimeFadeIn: float = 400.0
@@ -68,6 +73,7 @@ class OsuHitObject(HitObject):
         self.ComboOffset: int = 0
         self.IndexInCurrentCombo: int = 0
         self.ComboIndex: int = 0
+        self.ComboIndexWithOffsets: int = 0
         self.LastInCombo: bool = False
 
     @property
@@ -93,14 +99,32 @@ class OsuHitObject(HitObject):
                 nested.StackHeight = value
 
     @property
+    def Position(self) -> Vector2:
+        """Return the position of the hit object."""
+        return self.position
+
+    @Position.setter
+    def Position(self, value: Vector2) -> None:
+        """Set the position of the hit object."""
+        self.position = value
+
+    @property
     def X(self) -> float:
         """Return the object's x position."""
         return self.Position.X
+
+    @X.setter
+    def X(self, value: float) -> None:
+        self.Position = Vector2(value, self.Position.Y)
 
     @property
     def Y(self) -> float:
         """Return the object's y position."""
         return self.Position.Y
+
+    @Y.setter
+    def Y(self, value: float) -> None:
+        self.Position = Vector2(self.Position.X, value)
 
     @property
     def Radius(self) -> float:
@@ -133,7 +157,7 @@ class OsuHitObject(HitObject):
         """Return the object's end position after stacking is applied."""
         return self.EndPosition + self.StackOffset
 
-    def ApplyDefaultsToSelf(self, control_point_info, difficulty) -> None:
+    def ApplyDefaultsToSelf(self, control_point_info: ControlPointInfo, difficulty: BeatmapDifficulty) -> None:
         """Derive preempt time, fade-in and scale from the beatmap.
 
         Args:
@@ -154,6 +178,24 @@ class OsuHitObject(HitObject):
         self.TimeFadeIn = 400.0 * min(1.0, self.TimePreempt / PREEMPT_MIN)
 
         self.Scale = CalculateScaleFromCircleSize(difficulty.CircleSize, True)
+
+    def UpdateComboInformation(self, last_object: IHasComboInformation | None) -> None:
+        """Update combo index and combo offset relative to the preceding object."""
+        index = last_object.ComboIndex if last_object is not None else 0
+        index_with_offsets = last_object.ComboIndexWithOffsets if last_object is not None else 0
+        in_current_combo = last_object.IndexInCurrentCombo + 1 if last_object is not None else 0
+
+        if not isinstance(self, Spinner) and (self.NewCombo or last_object is None or isinstance(last_object, Spinner)):
+            in_current_combo = 0
+            index += 1
+            index_with_offsets += self.ComboOffset + 1
+
+            if last_object is not None:
+                last_object.LastInCombo = True
+
+        self.ComboIndex = index
+        self.ComboIndexWithOffsets = index_with_offsets
+        self.IndexInCurrentCombo = in_current_combo
 
     def CreateJudgement(self):
         """Return the judgement this object is scored with."""

@@ -29,10 +29,11 @@ from dataclasses import dataclass, field
 from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
 from parsecore.Beatmaps.BeatmapMetadata import BeatmapMetadata
 from parsecore.Beatmaps.CountdownType import CountdownType
+from parsecore.Beatmaps.IBeatmapInfo import IBeatmapInfo
 
 
 @dataclass(slots=True)
-class BeatmapInfo:
+class BeatmapInfo(IBeatmapInfo):
     """The settings of a single difficulty, as read from ``[General]`` and friends."""
 
     Metadata: BeatmapMetadata = field(default_factory=BeatmapMetadata)

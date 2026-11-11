@@ -24,11 +24,17 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from parsecore.Beatmaps.Beatmap import Beatmap
+from parsecore.Rulesets.Mania.Beatmaps.Patterns.Pattern import Pattern
+from parsecore.Rulesets.Objects.HitObject import HitObject
+
 
 class PatternGenerator:
     """The base of every way an object becomes mania notes."""
 
-    def __init__(self, hit_object, beatmap, total_columns: int, previous_pattern) -> None:
+    def __init__(
+            self, hit_object: HitObject, beatmap: Beatmap, total_columns: int, previous_pattern: Pattern
+    ) -> None:
         """Create a generator for one object.
 
         Args:
@@ -42,6 +48,6 @@ class PatternGenerator:
         self.PreviousPattern = previous_pattern
         self.TotalColumns = total_columns
 
-    def Generate(self) -> list:
+    def Generate(self) -> list[Pattern]:
         """Return the patterns of notes for this object."""
         raise NotImplementedError

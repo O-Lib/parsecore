@@ -24,20 +24,23 @@ SOFTWARE.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from parsecore.Rulesets.Osu.Objects.SliderEndCircle import SliderEndCircle
+
+if TYPE_CHECKING:
+    from parsecore.Rulesets.Osu.Objects.Slider import Slider
 
 
 class SliderRepeat(SliderEndCircle):
     """The point where a slider turns back on itself."""
 
-    def __init__(self, slider=None, start_time: float = 0.0, position=None) -> None:
+    def __init__(self, slider: Slider) -> None:
         """Create a repeat point.
 
         Args:
             slider: The slider this repeat belongs to.
-            start_time: The repeat's time in milliseconds.
-            position: The repeat's position along the path.
         """
-        super().__init__(slider, start_time, position)
+        super().__init__(slider)
         # Kept so the repeat can be placed again if the slider's path moves.
         self.PathProgress: float = 0.0

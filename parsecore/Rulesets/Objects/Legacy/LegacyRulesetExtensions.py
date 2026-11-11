@@ -28,6 +28,9 @@ import math
 from decimal import ROUND_HALF_EVEN, Decimal
 
 from parsecore.Beatmaps.BeatmapDifficulty import BeatmapDifficulty
+from parsecore.Beatmaps.ControlPoints.TimingControlPoint import TimingControlPoint
+from parsecore.Rulesets.Objects.Types.IHasSliderVelocity import IHasSliderVelocity
+from parsecore.Utils.Precision import Clamp
 from parsecore.Utils.Vector2 import f32
 
 # Builds of osu! up to 2013-05-04 rounded the playfield down, which scaled
@@ -39,7 +42,7 @@ DECIMAL_SIXTEEN = Decimal(16)
 
 
 def GetPrecisionAdjustedBeatLength(
-    has_slider_velocity, timing_control_point, ruleset_short_name: str
+    has_slider_velocity: IHasSliderVelocity, timing_control_point: TimingControlPoint, ruleset_short_name: str
 ) -> float:
     """Return the beat length a slider's velocity is measured against.
 
@@ -70,7 +73,7 @@ def GetPrecisionAdjustedBeatLength(
     if slider_velocity_as_beat_length < 0:
         # The cast to single precision is what osu!stable effectively did.
         bpm_multiplier = (
-            min(max(f32(-slider_velocity_as_beat_length), 10), upper) / 100.0
+            Clamp(f32(-slider_velocity_as_beat_length), 10.0, upper) / 100.0
         )
     else:
         bpm_multiplier = 1.0
@@ -100,7 +103,7 @@ def CalculateScaleFromCircleSize(
 
 
 def CalculateDifficultyPeppyStars(
-    difficulty, object_count: int, drain_length: int
+    difficulty: BeatmapDifficulty, object_count: int, drain_length: int
 ) -> int:
     """Return the rough star count osu!stable multiplied its scores by.
 
